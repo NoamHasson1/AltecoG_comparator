@@ -3,8 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const electraZone = document.getElementById('electra-drop-zone');
     const reconcileBtn = document.getElementById('reconcile-btn');
     const resultsContainer = document.getElementById('results-container');
-    const resultsTitle = document.getElementById('results-title');
-    const resultsTableContainer = document.getElementById('results-table-container');
+    const spinner = document.getElementById('spinner');
 
     let altecoFile = null;
     let electraFile = null;
@@ -58,8 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('alteco_file', altecoFile);
         formData.append('electra_file', electraFile);
 
-        resultsTitle.textContent = 'Processing...';
-        resultsTableContainer.innerHTML = '';
+        // Show spinner, prepare UI
+        reconcileBtn.disabled = true;
+        reconcileBtn.textContent = 'Processing...';
+        resultsContainer.style.display = 'none';
 
         try {
             const response = await fetch('/reconcile', {
@@ -73,20 +74,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(results.error || 'An unknown error occurred.');
             }
 
-            if (results.length === 0) {
-                resultsTitle.textContent = '✅ Amazing! No metadata mismatches found.';
-            } else {
-                resultsTitle.textContent = `Found ${results.length} Mismatches`;
-                resultsTableContainer.innerHTML = createTable(results);
-            }
+            // Reveal the results section
+            resultsContainer.style.display = 'flex';
+            
+            // Render Phase 1
+            renderPhaseData(
+                results.step1, 
+                'step1-table-container', 
+                'step1-badge'
+            );
+
+            // Render Phase 2
+            renderPhaseData(
+                results.step2, 
+                'step2-table-container', 
+                'step2-badge'
+            );
+
         } catch (error) {
-            resultsTitle.textContent = 'Error';
-            resultsTableContainer.innerHTML = `<p style="color: red;">${error.message}</p>`;
+            alert(`Error: ${error.message}`);
+        } finally {
+            reconcileBtn.disabled = false;
+            reconcileBtn.textContent = 'Run Reconciliation';
         }
     });
 
+    function renderPhaseData(dataArray, containerId, badgeId) {
+        const container = document.getElementById(containerId);
+        const badge = document.getElementById(badgeId);
+
+        if (!dataArray || dataArray.length === 0) {
+            badge.textContent = '0 Issues';
+            badge.className = 'badge success';
+            container.innerHTML = '<p class="success-msg">✅ Perfect match! No discrepancies found for this phase.</p>';
+        } else {
+            badge.textContent = `${dataArray.length} Mismatches`;
+            badge.className = 'badge error';
+            container.innerHTML = createTable(dataArray);
+        }
+    }
+
     function createTable(data) {
-        const headers = Object.keys(data[0]);
+        // Exclude the 'Phase' column from UI since it's redundant now
+        const headers = Object.keys(data[0]).filter(h => h !== 'Phase');
+        
         const headerHtml = headers.map(h => `<th>${h}</th>`).join('');
         const bodyHtml = data.map(row => {
             const cells = headers.map(h => `<td>${row[h]}</td>`).join('');

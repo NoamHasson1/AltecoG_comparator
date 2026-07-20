@@ -1,25 +1,21 @@
 import pandas as pd
+import logging
+
+def _normalize_for_comparison(value):
+    if pd.isna(value):
+        return ""
+    return str(value).strip()
 
 class ReconciliationEngine:
     def __init__(self, df_alteco, df_client):
-        """
-        Generic Engine: Expects both DataFrames to follow the standardized English schema.
-        """
         self.df_alteco = df_alteco
         self.df_client = df_client
-        self.discrepancies = []
+        self.discrepancies_step1 = []
+        self.discrepancies_step2 = []
+        
+        self.merged = pd.merge(self.df_alteco, self.df_client, on="meter_number", suffixes=('_Alteco', '_Client'))
 
     def run_step_1_metadata(self):
-        """
-        Executes a completely generic row-level metadata comparison.
-        """
-        self.discrepancies = []
-        
-        # Merge both standardized datasets on the unified key 'meter_number'
-        merged = pd.merge(self.df_alteco, self.df_client, on="meter_number", suffixes=('_Alteco', '_Client'))
-        
-        # List of generic fields to check and their human-readable report names
-        # Now separated into English and Hebrew for clean report columns
         fields_to_check = {
             "billing_month": ("Billing Month", "חודש חיוב"),
             "billing_days": ("Billing Days", "ימים לחיוב"),
@@ -38,7 +34,7 @@ class ReconciliationEngine:
             "kva": ("KVA", "KVA")
         }
         
-        for _, row in merged.iterrows():
+        for _, row in self.merged.iterrows():
             meter_num = row["meter_number"]
             client_name = row.get("customer_name_Alteco", "Unknown Client")
             
@@ -47,29 +43,38 @@ class ReconciliationEngine:
                 val_alteco = row.get(f"{field}_Alteco") 
                 val_client = row.get(f"{field}_Client")
                 
-                # Normalize date strings to prevent format false-positives
-                if field == "contract_start_date" and pd.notna(val_alteco) and pd.notna(val_client):
-                    val_alteco = pd.to_datetime(val_alteco).strftime('%Y-%m-%d')
-                    val_client = pd.to_datetime(val_client).strftime('%Y-%m-%d')
+                if field == "billing_month" and pd.notna(val_alteco):
+                    try:
+                        val_alteco = pd.to_datetime(val_alteco).strftime('%Y-%m')
+                    except Exception:
+                        pass
                 
-                # Run comparison if values exist
-                if pd.notna(val_alteco) and pd.notna(val_client):
-                    # Clean whitespaces if values are strings
-                    if isinstance(val_alteco, str): val_alteco = val_alteco.strip()
-                    if isinstance(val_client, str): val_client = val_client.strip()
-                    
-                    # Attempt to convert numeric-like fields to a consistent numeric type
+                if field == "contract_start_date" and pd.notna(val_alteco) and pd.notna(val_client):
+                    try:
+                        val_alteco = pd.to_datetime(val_alteco).strftime('%Y-%m-%d')
+                        val_client = pd.to_datetime(val_client).strftime('%Y-%m-%d')
+                    except Exception:
+                        pass
+                
+                norm_alteco = _normalize_for_comparison(val_alteco)
+                norm_client = _normalize_for_comparison(val_client)
+                
+                if norm_alteco != "" and norm_client != "":
+                    is_mismatch = False
                     if field in ["billing_days", "fixed_payment", "kva"]:
                         try:
-                            val_alteco = float(val_alteco)
-                            val_client = float(val_client)
+                            if float(val_alteco) != float(val_client):
+                                is_mismatch = True
                         except (ValueError, TypeError):
-                            # If conversion fails, compare as is
-                            pass
-                        
-                    # Flag if there is a mismatch
-                    if str(val_alteco) != str(val_client):
-                        self.discrepancies.append({
+                            if norm_alteco != norm_client:
+                                is_mismatch = True
+                    else:
+                        if norm_alteco != norm_client:
+                            is_mismatch = True
+
+                    if is_mismatch:
+                        logging.warning(f"PHASE 1 MISMATCH for Meter '{meter_num}' on '{name_en}'")
+                        self.discrepancies_step1.append({
                             "Meter Number": meter_num,
                             "Client Name": client_name,
                             "Mismatched Field": name_en,
@@ -77,5 +82,68 @@ class ReconciliationEngine:
                             "Alteco Value": val_alteco,
                             "Client Value": val_client
                         })
+
+    def run_step_2_consumption(self):
+        fields_to_check = {
+            "total_kwh": ("Total Consumption (kWh)", "סה״כ צריכה קוט״ש"),
+            "offpeak_kwh": ("Off-Peak Consumption (kWh)", "צריכה בשפל קוט״ש"),
+            "peak_kwh": ("Peak Consumption (kWh)", "צריכה בפסגה קוט״ש")
+        }
+        
+        tolerance = 0.5 
+        
+        for _, row in self.merged.iterrows():
+            meter_num = row["meter_number"]
+            client_name = row.get("customer_name_Alteco", "Unknown Client")
+            
+            for field, display_name in fields_to_check.items():
+                name_en, name_he = display_name
+                val_alteco = row.get(f"{field}_Alteco") 
+                val_client = row.get(f"{field}_Client")
+                
+                norm_alteco = _normalize_for_comparison(val_alteco)
+                norm_client = _normalize_for_comparison(val_client)
+                
+                if norm_alteco != "" and norm_client != "":
+                    try:
+                        num_alteco = float(val_alteco)
+                        num_client = float(val_client)
                         
-        return pd.DataFrame(self.discrepancies)
+                        if abs(num_alteco - num_client) > tolerance:
+                            logging.warning(f"PHASE 2 MISMATCH for Meter '{meter_num}' on '{name_en}'")
+                            self.discrepancies_step2.append({
+                                "Meter Number": meter_num,
+                                "Client Name": client_name,
+                                "Mismatched Field": name_en,
+                                "Original Field (Hebrew)": name_he,
+                                "Alteco Value": round(num_alteco, 2),
+                                "Client Value": round(num_client, 2)
+                            })
+                    except (ValueError, TypeError):
+                        logging.error(f"Invalid consumption data type for Meter '{meter_num}'")
+                        self.discrepancies_step2.append({
+                            "Meter Number": meter_num,
+                            "Client Name": client_name,
+                            "Mismatched Field": name_en,
+                            "Original Field (Hebrew)": name_he,
+                            "Alteco Value": val_alteco,
+                            "Client Value": val_client
+                        })
+
+    def run_all_steps(self):
+        """
+        Orchestrator: Runs all phases and returns a dictionary with separate DataFrames.
+        """
+        self.discrepancies_step1 = []
+        self.discrepancies_step2 = []
+        
+        self.run_step_1_metadata()
+        self.run_step_2_consumption()
+        
+        df_step1 = pd.DataFrame(self.discrepancies_step1).replace({pd.NaT: None, pd.NA: None, float('nan'): None})
+        df_step2 = pd.DataFrame(self.discrepancies_step2).replace({pd.NaT: None, pd.NA: None, float('nan'): None})
+        
+        return {
+            "step1": df_step1,
+            "step2": df_step2
+        }

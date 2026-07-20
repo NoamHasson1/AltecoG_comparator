@@ -1,44 +1,61 @@
-/* General Body & Typography */
+/* General Dashboard Typography & Colors */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
-    background-color: #f5f5f7; /* Apple's light gray background */
-    color: #1d1d1f; /* Apple's primary text color */
+    background-color: #f4f7f6; /* Modern light gray/greenish background */
+    color: #2c3e50;
     margin: 0;
-    padding: 2rem;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    min-height: 100vh;
+    padding: 0;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
 }
 
-/* Main Container */
-.container {
-    width: 100%;
-    max-width: 800px;
+/* Top Navigation */
+.top-nav {
+    background-color: #ffffff;
+    padding: 1rem 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    border-bottom: 1px solid #e0e6ed;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+.logo span {
+    color: #2e7d32; /* Deep green accent */
+    font-weight: 400;
+}
+
+/* Main Layout */
+.dashboard-content {
+    max-width: 1400px; /* Wide layout like the image */
+    margin: 2rem auto;
+    padding: 0 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* Card Component */
+.card {
     background: #ffffff;
-    padding: 2.5rem;
-    border-radius: 18px; /* Softer, more modern radius */
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.07);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.03);
+    border: 1px solid #e0e6ed;
 }
 
-header {
-    text-align: center;
-    margin-bottom: 2rem;
+.section-header h2 {
+    margin-top: 0;
+    font-size: 1.25rem;
+    color: #2c3e50;
 }
 
-h1 {
-    font-size: 2rem;
-    font-weight: 600;
-    color: #1d1d1f;
-    margin-bottom: 0.5rem;
-}
-
-header p {
-    color: #6e6e73; /* Softer secondary text color */
-    font-size: 1.1rem;
+.section-header p {
+    color: #6c7a89;
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
 }
 
 /* Drop Zones */
@@ -46,58 +63,37 @@ header p {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
-    margin: 2.5rem 0;
+    margin-bottom: 1.5rem;
 }
 
 .drop-zone {
-    background-color: #f5f5f7;
-    border: 1px solid #d2d2d7;
-    border-radius: 12px;
+    background-color: #f8fafc;
+    border: 2px dashed #cbd5e1;
+    border-radius: 6px;
     text-align: center;
-    cursor: pointer;
-    transition: all 0.2s ease-in-out;
     position: relative;
-    padding: 1.5rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    min-height: 120px;
+    padding: 2.5rem 1rem;
+    transition: all 0.2s ease;
 }
 
 .drop-zone:hover, .drop-zone.highlight {
-    transform: translateY(-3px);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-    border-color: #007aff; /* Apple blue for highlight */
-    background-color: #ffffff;
+    border-color: #2e7d32;
+    background-color: #f0fdf4;
 }
 
-.drop-zone-prompt {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-}
-
-.drop-zone-prompt svg {
-    width: 32px;
-    height: 32px;
-    stroke: #6e6e73;
-    margin-bottom: 0.5rem;
-}
-
-.drop-zone .prompt-text {
-    color: #6e6e73;
+.drop-zone-prompt .prompt-text {
     font-weight: 500;
+    color: #64748b;
 }
 
-.drop-zone .file-name {
+.drop-zone-prompt .file-name {
+    display: block;
+    margin-top: 0.5rem;
     font-weight: 600;
-    color: #007aff;
-    word-break: break-all;
+    color: #2e7d32;
 }
 
+/* Hidden Input for Drag & Drop (Kept from our previous fix) */
 .drop-zone-input {
     position: absolute;
     top: 0;
@@ -108,78 +104,99 @@ header p {
     cursor: pointer;
 }
 
-/* Main Action Button */
-#reconcile-btn {
-    display: block;
-    width: 100%;
-    padding: 0.9rem 1rem;
-    font-size: 1.05rem;
-    font-weight: bold;
-    color: #fff;
-    background-color: #007aff; /* Apple blue */
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s ease-in-out;
+/* Buttons */
+.action-row {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
 }
 
-#reconcile-btn:hover {
-    background-color: #0a84ff;
-    transform: translateY(-2px);
-}
-
-/* Results Section */
-#results-container {
-    margin-top: 2rem;
-    padding-top: 2rem;
-    border-top: 1px solid #e5e5e5;
-}
-
-#results-title {
-    text-align: center;
+.btn-primary {
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
     font-weight: 600;
+    color: #fff;
+    background-color: #2e7d32; /* SaaS Green */
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+    background-color: #1b5e20;
+}
+
+/* Results Section & Scrollable Tables */
+.results-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e0e6ed;
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #2c3e50;
+}
+
+.badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 99px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.badge.error { background-color: #fee2e2; color: #991b1b; }
+.badge.success { background-color: #dcfce3; color: #166534; }
+
+/* The magic for scrollable tables */
+.table-scroll-wrapper {
+    max-height: 350px; /* Limits height, forces scroll */
+    overflow-y: auto;
+    border: 1px solid #e0e6ed;
+    border-radius: 6px;
 }
 
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 1rem;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
+    text-align: left;
 }
 
 th, td {
-    padding: 0.8rem 1rem;
-    text-align: left;
-    border-bottom: 1px solid #e5e5e5;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e0e6ed;
 }
 
 th {
-    background-color: #f5f5f7;
+    background-color: #f8fafc;
     font-weight: 600;
-    color: #1d1d1f;
+    color: #475569;
+    position: sticky; /* Makes header stick to top when scrolling */
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 1px 0 #e0e6ed; /* Border for sticky header */
 }
 
-td {
-    color: #333;
+tr:hover td {
+    background-color: #f1f5f9;
 }
 
-tr:last-child td {
-    border-bottom: none;
-}
-
-/* Spinner for loading state */
-.spinner {
-    margin: 2rem auto;
-    width: 40px;
-    height: 40px;
-    border: 4px solid rgba(0, 0, 0, 0.1);
-    border-left-color: #007aff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+.success-msg {
+    padding: 2rem;
+    text-align: center;
+    color: #166534;
+    font-weight: 500;
 }

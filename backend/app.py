@@ -2,6 +2,7 @@ import os
 import uvicorn
 import pandas as pd
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException
+import traceback
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -33,28 +34,27 @@ async def index(request: Request):
 
 @app.post("/reconcile")
 async def reconcile_files(alteco_file: UploadFile = File(...), electra_file: UploadFile = File(...)):
-    """
-    API endpoint that receives the two uploaded files, runs the reconciliation,
-    and returns the discrepancies as JSON.
-    """
     try:
-        # 2. Load data directly from the uploaded file objects
-        # The UploadFile object has a file-like .file attribute that pandas can read
         df_alteco = load_alteco_data(alteco_file.file)
         df_electra = load_electra_data(electra_file.file)
 
-        # 3. Run the existing reconciliation engine
         engine = ReconciliationEngine(df_alteco, df_electra)
-        df_errors = engine.run_step_1_metadata()
-
-        # 4. Convert the results to a JSON format for the frontend
-        # FastAPI will automatically handle the conversion of this list of dicts to JSON
-        results_list = df_errors.to_dict(orient='records')
         
-        return JSONResponse(content=jsonable_encoder(results_list))
+        # המנוע עכשיו מחזיר מילון {'step1': DataFrame, 'step2': DataFrame}
+        results_dict = engine.run_all_steps()
+
+        # אורזים הכל ל-JSON מסודר עם שתי רשימות נפרדות
+        response_data = {
+            "step1": results_dict["step1"].to_dict(orient='records'),
+            "step2": results_dict["step2"].to_dict(orient='records')
+        }
+        
+        return JSONResponse(content=jsonable_encoder(response_data))
 
     except Exception as e:
-        # Return a structured error if anything goes wrong during processing
+        print("--- DETAILED ERROR ---")
+        traceback.print_exc()
+        print("----------------------")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 if __name__ == '__main__':
