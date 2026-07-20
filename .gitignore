@@ -1,0 +1,14 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+
+# macOS specific files
+.DS_Store
+
+# Generated data files
+data/discrepancies_report.xlsx

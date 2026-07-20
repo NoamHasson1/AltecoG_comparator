@@ -1,0 +1,186 @@
+/* General Body & Typography */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+    background-color: #f5f5f7; /* Apple's light gray background */
+    color: #1d1d1f; /* Apple's primary text color */
+    margin: 0;
+    padding: 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Main Container */
+.container {
+    width: 100%;
+    max-width: 800px;
+    background: #ffffff;
+    padding: 2.5rem;
+    border-radius: 18px; /* Softer, more modern radius */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.07);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #1d1d1f;
+    margin-bottom: 0.5rem;
+}
+
+header p {
+    color: #6e6e73; /* Softer secondary text color */
+    font-size: 1.1rem;
+}
+
+/* Drop Zones */
+.drop-zones {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 2.5rem 0;
+}
+
+.drop-zone {
+    background-color: #f5f5f7;
+    border: 1px solid #d2d2d7;
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    position: relative;
+    padding: 1.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    min-height: 120px;
+}
+
+.drop-zone:hover, .drop-zone.highlight {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    border-color: #007aff; /* Apple blue for highlight */
+    background-color: #ffffff;
+}
+
+.drop-zone-prompt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.drop-zone-prompt svg {
+    width: 32px;
+    height: 32px;
+    stroke: #6e6e73;
+    margin-bottom: 0.5rem;
+}
+
+.drop-zone .prompt-text {
+    color: #6e6e73;
+    font-weight: 500;
+}
+
+.drop-zone .file-name {
+    font-weight: 600;
+    color: #007aff;
+    word-break: break-all;
+}
+
+/* File input remains invisible but functional */
+.drop-zone-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* Main Action Button */
+#reconcile-btn {
+    display: block;
+    width: 100%;
+    padding: 0.9rem 1rem;
+    font-size: 1.05rem;
+    font-weight: bold;
+    color: #fff;
+    background-color: #007aff; /* Apple blue */
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+#reconcile-btn:hover {
+    background-color: #0a84ff;
+    transform: translateY(-2px);
+}
+
+/* Results Section */
+#results-container {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e5e5e5;
+}
+
+#results-title {
+    text-align: center;
+    font-weight: 600;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.95rem;
+}
+
+th, td {
+    padding: 0.8rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+th {
+    background-color: #f5f5f7;
+    font-weight: 600;
+    color: #1d1d1f;
+}
+
+td {
+    color: #333;
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+/* Spinner for loading state */
+.spinner {
+    margin: 2rem auto;
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-left-color: #007aff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
