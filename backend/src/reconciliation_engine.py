@@ -34,7 +34,8 @@ class ReconciliationEngine:
             "billing_type": ("Billing Type", "סוג חיוב"),
             "tariff": ("Tariff", "תעריף"),
             "fixed_payment": ("Fixed Payment", "תשלום קבוע"),
-            "contract_start_date": ("Contract Start Date", "תאריך התחלת החוזה")
+            "contract_start_date": ("Contract Start Date", "תאריך התחלת החוזה"),
+            "kva": ("KVA", "KVA")
         }
         
         for _, row in merged.iterrows():
@@ -58,7 +59,7 @@ class ReconciliationEngine:
                     if isinstance(val_client, str): val_client = val_client.strip()
                     
                     # Attempt to convert numeric-like fields to a consistent numeric type
-                    if field in ["billing_days", "fixed_payment"]:
+                    if field in ["billing_days", "fixed_payment", "kva"]:
                         try:
                             val_alteco = float(val_alteco)
                             val_client = float(val_client)

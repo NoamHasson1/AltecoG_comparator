@@ -14,8 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const promptText = zone.querySelector('.prompt-text');
         const fileNameDisplay = zone.querySelector('.file-name');
 
-        zone.addEventListener('click', () => input.click());
-
         zone.addEventListener('dragover', (e) => {
             e.preventDefault();
             zone.classList.add('highlight');

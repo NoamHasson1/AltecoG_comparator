@@ -15,7 +15,8 @@ STANDARD_SCHEMA = [
     "billing_type",
     "tariff",
     "fixed_payment",
-    "contract_start_date"
+    "contract_start_date",
+    "kva"
 ]
 
 def load_alteco_data(file_path):
@@ -40,7 +41,8 @@ def load_alteco_data(file_path):
         "סוג חיוב": "billing_type",
         "תעריף": "tariff",
         "תשלום קבוע": "fixed_payment",
-        "תאריך התחלת החוזה": "contract_start_date"
+        "תאריך התחלת החוזה": "contract_start_date",
+        "KVA": "kva"
     }
     df = df.rename(columns=rename_map)
     
@@ -101,7 +103,8 @@ def load_electra_data(file_path):
         "מתח": "voltage",
         "קבוע": "fixed_payment",
         "סוג לקוח": "consumer_type",
-        "תאריך הצטרפות": "contract_start_date"
+        "תאריך הצטרפות": "contract_start_date",
+        "KVA": "kva"
     }
     electra_unified = electra_unified.rename(columns=rename_map)
 

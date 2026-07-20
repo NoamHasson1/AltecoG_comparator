@@ -98,7 +98,6 @@ header p {
     word-break: break-all;
 }
 
-/* File input remains invisible but functional */
 .drop-zone-input {
     position: absolute;
     top: 0;
