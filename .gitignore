@@ -11,4 +11,4 @@ venv/
 .DS_Store
 
 # Generated data files
-data/discrepancies_report.xlsx
+data/discrepancies_report.xlsx.DS_Store
