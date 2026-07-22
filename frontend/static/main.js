@@ -2,17 +2,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const altecoZone = document.getElementById('alteco-drop-zone');
     const electraZone = document.getElementById('electra-drop-zone');
     const reconcileBtn = document.getElementById('reconcile-btn');
+    const btnText = reconcileBtn.querySelector('.btn-text');
+    const spinner = reconcileBtn.querySelector('.spinner');
     const resultsContainer = document.getElementById('results-container');
-    const spinner = document.getElementById('spinner');
 
     let altecoFile = null;
     let electraFile = null;
 
-    function setupDropZone(zone, fileStore) {
+    // Checks if both files are present and enables/disables the button
+    function updateReconcileButtonState() {
+        if (altecoFile && electraFile) {
+            reconcileBtn.disabled = false;
+        } else {
+            reconcileBtn.disabled = true;
+        }
+    }
+
+    function setupDropZone(zone, setFileCallback, clearFileCallback) {
         const input = zone.querySelector('.drop-zone-input');
         const promptText = zone.querySelector('.prompt-text');
+        const formatHint = zone.querySelector('.format-hint');
+        const uploadIcon = zone.querySelector('.upload-icon');
+        const fileDisplay = zone.querySelector('.file-display');
         const fileNameDisplay = zone.querySelector('.file-name');
+        const removeBtn = zone.querySelector('.remove-file-btn');
 
+        function handleFileSelection(file) {
+            if (file) {
+                setFileCallback(file);
+                // Hide default prompt UI
+                promptText.style.display = 'none';
+                formatHint.style.display = 'none';
+                uploadIcon.style.display = 'none';
+                // Show file name & remove button
+                fileDisplay.style.display = 'flex';
+                fileNameDisplay.textContent = file.name;
+                updateReconcileButtonState();
+            }
+        }
+
+        // Drag & Drop Events
         zone.addEventListener('dragover', (e) => {
             e.preventDefault();
             zone.classList.add('highlight');
@@ -27,39 +56,62 @@ document.addEventListener('DOMContentLoaded', () => {
             zone.classList.remove('highlight');
             const file = e.dataTransfer.files[0];
             if (file) {
-                input.files = e.dataTransfer.files;
-                fileStore(file);
-                promptText.style.display = 'none';
-                fileNameDisplay.textContent = file.name;
+                input.files = e.dataTransfer.files; // Sync with hidden input
+                handleFileSelection(file);
             }
         });
 
+        // Click Event (via hidden input)
         input.addEventListener('change', () => {
             if (input.files.length > 0) {
-                const file = input.files[0];
-                fileStore(file);
-                promptText.style.display = 'none';
-                fileNameDisplay.textContent = file.name;
+                handleFileSelection(input.files[0]);
             }
+        });
+
+        // Remove File Event
+        removeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation(); // Prevents triggering the file input click
+            
+            clearFileCallback();
+            input.value = ''; // Clear hidden input
+            
+            // Restore default prompt UI
+            fileDisplay.style.display = 'none';
+            fileNameDisplay.textContent = '';
+            promptText.style.display = 'block';
+            formatHint.style.display = 'block';
+            uploadIcon.style.display = 'block';
+            
+            updateReconcileButtonState();
         });
     }
 
-    setupDropZone(altecoZone, (file) => { altecoFile = file; });
-    setupDropZone(electraZone, (file) => { electraFile = file; });
+    // Initialize Drop Zones
+    setupDropZone(
+        altecoZone, 
+        (file) => { altecoFile = file; }, 
+        () => { altecoFile = null; }
+    );
+    
+    setupDropZone(
+        electraZone, 
+        (file) => { electraFile = file; }, 
+        () => { electraFile = null; }
+    );
 
+    // API Call & UI State Management
     reconcileBtn.addEventListener('click', async () => {
-        if (!altecoFile || !electraFile) {
-            alert('Please select both Alteco and Electra files.');
-            return;
-        }
+        if (!altecoFile || !electraFile) return;
 
         const formData = new FormData();
         formData.append('alteco_file', altecoFile);
         formData.append('electra_file', electraFile);
 
-        // Show spinner, prepare UI
+        // UI Loading State
         reconcileBtn.disabled = true;
-        reconcileBtn.textContent = 'Processing...';
+        btnText.textContent = 'Processing...';
+        spinner.style.display = 'inline-block';
         resultsContainer.style.display = 'none';
 
         try {
@@ -91,11 +143,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 'step2-badge'
             );
 
+            // Scroll down slightly so results are clearly visible
+            resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
         } catch (error) {
             alert(`Error: ${error.message}`);
         } finally {
+            // Restore Button State
             reconcileBtn.disabled = false;
-            reconcileBtn.textContent = 'Run Reconciliation';
+            btnText.textContent = 'Run Reconciliation';
+            spinner.style.display = 'none';
         }
     });
 
@@ -106,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dataArray || dataArray.length === 0) {
             badge.textContent = '0 Issues';
             badge.className = 'badge success';
-            container.innerHTML = '<p class="success-msg">✅ Perfect match! No discrepancies found for this phase.</p>';
+            container.innerHTML = '<p class="success-msg">Perfect match! No discrepancies found for this phase.</p>';
         } else {
             badge.textContent = `${dataArray.length} Mismatches`;
             badge.className = 'badge error';
@@ -115,7 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createTable(data) {
-        // Exclude the 'Phase' column from UI since it's redundant now
         const headers = Object.keys(data[0]).filter(h => h !== 'Phase');
         
         const headerHtml = headers.map(h => `<th>${h}</th>`).join('');

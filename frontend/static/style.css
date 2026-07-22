@@ -1,7 +1,7 @@
 /* General Dashboard Typography & Colors */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
-    background-color: #f4f7f6; /* Modern light gray/greenish background */
+    background-color: #f4f7f6;
     color: #2c3e50;
     margin: 0;
     padding: 0;
@@ -23,13 +23,13 @@ body {
 }
 
 .logo span {
-    color: #2e7d32; /* Deep green accent */
+    color: #2e7d32;
     font-weight: 400;
 }
 
 /* Main Layout */
 .dashboard-content {
-    max-width: 1400px; /* Wide layout like the image */
+    max-width: 1400px;
     margin: 2rem auto;
     padding: 0 2rem;
     display: flex;
@@ -44,6 +44,11 @@ body {
     padding: 2rem;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.03);
     border: 1px solid #e0e6ed;
+}
+
+/* Tighter padding for result cards */
+.result-card {
+    padding: 1.5rem;
 }
 
 .section-header h2 {
@@ -72,7 +77,7 @@ body {
     border-radius: 6px;
     text-align: center;
     position: relative;
-    padding: 2.5rem 1rem;
+    padding: 2rem 1rem;
     transition: all 0.2s ease;
 }
 
@@ -81,19 +86,69 @@ body {
     background-color: #f0fdf4;
 }
 
+.upload-icon {
+    width: 36px;
+    height: 36px;
+    fill: #94a3b8;
+    margin-bottom: 0.75rem;
+    transition: fill 0.2s ease;
+}
+
+.drop-zone:hover .upload-icon, .drop-zone.highlight .upload-icon {
+    fill: #2e7d32;
+}
+
 .drop-zone-prompt .prompt-text {
-    font-weight: 500;
-    color: #64748b;
+    font-weight: 600;
+    color: #475569;
+    display: block;
+}
+
+.format-hint {
+    display: block;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    margin-top: 0.25rem;
+}
+
+/* File display styling */
+.file-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    position: relative;
+    z-index: 10; /* Important: keeps it clickable above the hidden input */
 }
 
 .drop-zone-prompt .file-name {
-    display: block;
-    margin-top: 0.5rem;
     font-weight: 600;
     color: #2e7d32;
 }
 
-/* Hidden Input for Drag & Drop (Kept from our previous fix) */
+.remove-file-btn {
+    background: #fee2e2;
+    color: #ef4444;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.remove-file-btn:hover {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+/* Hidden Input */
 .drop-zone-input {
     position: absolute;
     top: 0;
@@ -102,6 +157,7 @@ body {
     height: 100%;
     opacity: 0;
     cursor: pointer;
+    z-index: 5;
 }
 
 /* Buttons */
@@ -113,22 +169,47 @@ body {
 }
 
 .btn-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 0.75rem 2rem;
     font-size: 1rem;
     font-weight: 600;
     color: #fff;
-    background-color: #2e7d32; /* SaaS Green */
+    background-color: #2e7d32;
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
     background-color: #1b5e20;
 }
 
-/* Results Section & Scrollable Tables */
+.btn-primary:disabled {
+    background-color: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+/* Spinner Animation */
+.spinner {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+    margin-right: 0.5rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Results Section */
 .results-section {
     display: flex;
     flex-direction: column;
@@ -160,9 +241,8 @@ body {
 .badge.error { background-color: #fee2e2; color: #991b1b; }
 .badge.success { background-color: #dcfce3; color: #166534; }
 
-/* The magic for scrollable tables */
 .table-scroll-wrapper {
-    max-height: 350px; /* Limits height, forces scroll */
+    max-height: 350px;
     overflow-y: auto;
     border: 1px solid #e0e6ed;
     border-radius: 6px;
@@ -184,10 +264,10 @@ th {
     background-color: #f8fafc;
     font-weight: 600;
     color: #475569;
-    position: sticky; /* Makes header stick to top when scrolling */
+    position: sticky;
     top: 0;
-    z-index: 10;
-    box-shadow: 0 1px 0 #e0e6ed; /* Border for sticky header */
+    z-index: 5;
+    box-shadow: 0 1px 0 #e0e6ed;
 }
 
 tr:hover td {
@@ -195,8 +275,9 @@ tr:hover td {
 }
 
 .success-msg {
-    padding: 2rem;
+    padding: 1.5rem;
     text-align: center;
     color: #166534;
     font-weight: 500;
+    margin: 0;
 }

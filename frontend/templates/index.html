@@ -9,7 +9,7 @@
 <body>
     <!-- Top Navigation Bar -->
     <header class="top-nav">
-        <div class="logo">Alteco <span>Billing comparison</span></div>
+        <div class="logo">AltecoG</div>
     </header>
 
     <main class="dashboard-content">
@@ -17,30 +17,43 @@
         <section class="card upload-section">
             <div class="section-header">
                 <h2>Data Upload</h2>
-                <p>Drag and drop the Alteco and Electra files to begin the reconciliation process.</p>
+                <p>Drag and drop Alteco and Electra files to begin the reconciliation process.</p>
             </div>
             
             <div class="drop-zones">
                 <div class="drop-zone" id="alteco-drop-zone">
+                    <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.36 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
                     <div class="drop-zone-prompt">
                         <span class="prompt-text">Drag & Drop Alteco File</span>
-                        <span class="file-name" id="alteco-file-name"></span>
+                        <span class="format-hint">Supported format: .xlsx</span>
+                        <div class="file-display" style="display: none;">
+                            <span class="file-name" id="alteco-file-name"></span>
+                            <button class="remove-file-btn" type="button" aria-label="Remove file">✕</button>
+                        </div>
                     </div>
                     <input type="file" class="drop-zone-input" id="alteco-file-input" accept=".xlsx, .csv">
                 </div>
 
                 <div class="drop-zone" id="electra-drop-zone">
+                    <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.36 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
                     <div class="drop-zone-prompt">
                         <span class="prompt-text">Drag & Drop Electra File</span>
-                        <span class="file-name" id="electra-file-name"></span>
+                        <span class="format-hint">Supported format: .xlsx</span>
+                        <div class="file-display" style="display: none;">
+                            <span class="file-name" id="electra-file-name"></span>
+                            <button class="remove-file-btn" type="button" aria-label="Remove file">✕</button>
+                        </div>
                     </div>
                     <input type="file" class="drop-zone-input" id="electra-file-input" accept=".xlsx, .csv">
                 </div>
             </div>
 
             <div class="action-row">
-                <div id="spinner" class="spinner" style="display: none;"></div>
-                <button id="reconcile-btn" class="btn-primary">Run Reconciliation</button>
+                <!-- Button is disabled by default -->
+                <button id="reconcile-btn" class="btn-primary" disabled>
+                    <span class="spinner" style="display: none;"></span>
+                    <span class="btn-text">Run Reconciliation</span>
+                </button>
             </div>
         </section>
 
@@ -53,7 +66,6 @@
                     <h3>Phase 1: Metadata</h3>
                     <span id="step1-badge" class="badge"></span>
                 </div>
-                <!-- This wrapper allows the table to scroll while the card stays fixed -->
                 <div id="step1-table-container" class="table-scroll-wrapper"></div>
             </div>
 
