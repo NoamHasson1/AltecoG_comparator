@@ -5,16 +5,13 @@ import pandas as pd
 STANDARD_SCHEMA = [
     # Step 1: Commercial & Metadata
     "billing_month",
-    "billing_days",
     "customer_id",
     "customer_name",
     "tax_id",
     "iec_contract",
     "meter_number",
     "voltage",
-    "basic",
     "tou",
-    "consumer_type",
     "billing_type",
     "tariff",
     "fixed_payment",
@@ -37,16 +34,13 @@ def load_alteco_data(file_path):
     rename_map = {
         # Step 1: Metadata
         "חודש חיוב": "billing_month",
-        "ימים לחיוב": "billing_days",
         "מספר לקוח": "customer_id",
         "שם לקוח": "customer_name",
         "ח.פ לקוח": "tax_id",
         "מספר חוזה חח״י": "iec_contract",
         "מספר מונה": "meter_number",
         "מתח": "voltage",
-        "בסיסי": "basic",
         "תעו״ז": "tou",
-        "סוג צרכן": "consumer_type",
         "סוג חיוב": "billing_type",
         "תעריף": "tariff",
         "תשלום קבוע": "fixed_payment",
@@ -85,12 +79,10 @@ def _extract_electra_metadata(df_meta, df_drft):
 
     # 2. Extract billing month and days from DRFT
     df_drft['derived_month'] = pd.to_datetime(df_drft['draftDate']).dt.strftime('%Y-%m')
-    df_drft['derived_days'] = (pd.to_datetime(df_drft['draftLineTo']) - pd.to_datetime(df_drft['draftLineFrom'])).dt.days
 
     # Compress multiple billing rows to one summary metadata row per Customer ID
     drft_summary = df_drft.groupby('AccountExtID').agg({
         'derived_month': 'first',
-        'derived_days': 'first',
         'AccountName': 'first'
     }).reset_index()
 
@@ -104,7 +96,6 @@ def _extract_electra_metadata(df_meta, df_drft):
     # 5. Map to English schema
     rename_map = {
         "derived_month": "billing_month",
-        "derived_days": "billing_days",
         "מספר לקוח": "customer_id",
         "AccountName": "customer_name",
         "ת.ז./ח.פ.": "tax_id",
@@ -112,7 +103,6 @@ def _extract_electra_metadata(df_meta, df_drft):
         "מספר מונה": "meter_number",
         "מתח": "voltage",
         "קבוע": "fixed_payment",
-        "סוג לקוח": "consumer_type",
         "תאריך הצטרפות": "contract_start_date",
         "KVA": "kva"
     }
@@ -136,12 +126,12 @@ def _calculate_electra_consumption(df_drft):
     total_kwh = usage_df.groupby('AccountExtID')['Quantity'].sum().reset_index()
     total_kwh = total_kwh.rename(columns={'Quantity': 'total_kwh'})
     
-    # 3. CALCULATE OFF-PEAK KWH (שפל): Look for keywords in the description
+    # 3. CALCULATE OFF-PEAK KWH: Look for keywords in the description
     offpeak_df = usage_df[usage_df['draftLineDescription'].str.contains('לילה|שפל|סופש|סופ״ש', na=False, regex=True)]
     offpeak_kwh = offpeak_df.groupby('AccountExtID')['Quantity'].sum().reset_index()
     offpeak_kwh = offpeak_kwh.rename(columns={'Quantity': 'offpeak_kwh'})
     
-    # 4. CALCULATE PEAK KWH (פסגה): Look for peak keywords
+    # 4. CALCULATE PEAK KWH: Look for peak keywords
     peak_df = usage_df[usage_df['draftLineDescription'].str.contains('פסגה|יום', na=False, regex=True)]
     peak_kwh = peak_df.groupby('AccountExtID')['Quantity'].sum().reset_index()
     peak_kwh = peak_kwh.rename(columns={'Quantity': 'peak_kwh'})

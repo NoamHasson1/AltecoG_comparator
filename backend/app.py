@@ -40,10 +40,8 @@ async def reconcile_files(alteco_file: UploadFile = File(...), electra_file: Upl
 
         engine = ReconciliationEngine(df_alteco, df_electra)
         
-        # המנוע עכשיו מחזיר מילון {'step1': DataFrame, 'step2': DataFrame}
         results_dict = engine.run_all_steps()
 
-        # אורזים הכל ל-JSON מסודר עם שתי רשימות נפרדות
         response_data = {
             "step1": results_dict["step1"].to_dict(orient='records'),
             "step2": results_dict["step2"].to_dict(orient='records')

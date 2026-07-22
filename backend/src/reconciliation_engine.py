@@ -69,8 +69,12 @@ class ReconciliationEngine:
                             if norm_alteco != norm_client:
                                 is_mismatch = True
                     else:
-                        if norm_alteco != norm_client:
-                            is_mismatch = True
+                        if field == "customer_name":
+                            if sorted(norm_alteco.split()) != sorted(norm_client.split()):
+                                is_mismatch = True
+                        else:
+                            if norm_alteco != norm_client:
+                                is_mismatch = True
 
                     if is_mismatch:
                         logging.warning(f"PHASE 1 MISMATCH for Meter '{meter_num}' on '{name_en}'")
