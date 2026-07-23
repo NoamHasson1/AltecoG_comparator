@@ -16,7 +16,7 @@ class TestReconciliationEngine(unittest.TestCase):
             "meter_number": "M-GOOD", "billing_month": "2026-05", "billing_days": 31,
             "customer_id": "12345", "customer_name": "Perfect Client Ltd", "tax_id": "515151",
             "iec_contract": "999888", "contract_start_date": "2024-01-01",
-            "total_kwh": 1000.0, "offpeak_kwh": 300.0, "peak_kwh": 700.0
+            "total_kwh": 1000.0
         }])
         
         df_client = df_alteco.copy()

@@ -1,18 +1,25 @@
+import json
 import os
 import pandas as pd
-from src.data_loader import load_alteco_data, load_electra_data
+from src.data_loader import load_alteco_data
+from src.dynamic_loader import load_mapped_data
 from src.reconciliation_engine import ReconciliationEngine
+
+DEFAULT_MAPPING_PATH = os.path.join(os.path.dirname(__file__), "mappings", "electra_default.json")
 
 def main():
     alteco_file = "data/AltecoG_Example.xlsx"
     electra_file = "data/Electra_Example.xlsx"
     output_report_path = "data/discrepancies_report.xlsx"
-    
+
     print("Starting Altego Reconciliation Process...")
-    
+
     print("Loading and cleaning input files...")
+    with open(DEFAULT_MAPPING_PATH, "r", encoding="utf-8") as f:
+        mapping_config = json.load(f)
+
     df_alteco = load_alteco_data(alteco_file)
-    df_electra = load_electra_data(electra_file)
+    df_electra = load_mapped_data(electra_file, mapping_config)
 
     print(f"Rows loaded from Alteco: {len(df_alteco)}")
     print(f"Rows loaded from Electra: {len(df_electra)}")

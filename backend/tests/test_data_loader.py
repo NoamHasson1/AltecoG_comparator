@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -6,15 +7,20 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import unittest
 import pandas as pd
-from src.data_loader import load_alteco_data, load_electra_data
+from src.data_loader import load_alteco_data
+from src.dynamic_loader import load_mapped_data
 
 TEMP_ALTECO = "temp_alteco_test.xlsx"
 TEMP_ELECTRA = "temp_electra_test.xlsx"
+DEFAULT_MAPPING_PATH = os.path.join(os.path.dirname(__file__), "..", "mappings", "electra_default.json")
 
 
 class TestDataLoader(unittest.TestCase):
 
     def setUp(self):
+        with open(DEFAULT_MAPPING_PATH, "r", encoding="utf-8") as f:
+            self.electra_mapping = json.load(f)
+
         # 1. Create dummy Alteco file
         alteco_data = {
             "מספר מונה": [" M-11111 ", "M-22222"],
@@ -30,19 +36,20 @@ class TestDataLoader(unittest.TestCase):
         alteco_df = pd.DataFrame(alteco_data)
         alteco_df.to_excel(TEMP_ALTECO, sheet_name="חשבונית חוזה", index=False)
 
-        # 2. Create dummy Electra data with BOTH required sheets
+        # 2. Create dummy Electra-shaped data with BOTH required sheets
         electra_meta_data = {
             "מספר מונה": ["M-11111", " M-22222 ", "M-33333"],
             "סטטוס מתקן": ["פעיל", "פעיל", "מפורק"],
             "מספר לקוח": ["377001", "377002", "377003"],
             "ת.ז/ח.פ": ["123", "456", "789"],
             "מספר חח״י": ["111", "222", "333"],
+            "מתח": ["HV", "HV", "HV"],
+            "קבוע": [50.0, 60.0, 70.0],
+            "KVA": [27.71, 30.0, 25.0],
             "תאריך הצטרפות": ["2023-09-01", "2023-09-01", "2023-09-01"]
         }
         df_meta = pd.DataFrame(electra_meta_data)
 
-        # Added required columns for Phase 2 (Quantity, DraftLineType, Description)
-        # and Phase 3 (LineTotalAmount, KVA/Supply/Distribution description lines)
         electra_drft_data = {
             "AccountExtID": ["377001", "377001", "377001", "377002", "377003"],
             "AccountName": ["Client A", "Client A", "Client A", "Client B", "Client C"],
@@ -71,40 +78,50 @@ class TestDataLoader(unittest.TestCase):
         self.assertEqual(df.loc[0, "meter_number"], "M-11111")
         self.assertEqual(df.loc[0, "total_kwh"], 1000)
 
-    def test_electra_loader_filters_dismantled_meters(self):
-        df = load_electra_data(TEMP_ELECTRA)
+    def test_mapped_loader_filters_dismantled_meters(self):
+        df = load_mapped_data(TEMP_ELECTRA, self.electra_mapping)
         self.assertEqual(len(df), 2)
         self.assertNotIn("M-33333", df["meter_number"].values)
 
-    def test_electra_loader_maps_tax_id_and_iec_contract(self):
-        """Regression test: these were silently None due to mismatched Hebrew column punctuation."""
-        df = load_electra_data(TEMP_ELECTRA)
+    def test_mapped_loader_maps_tax_id_and_iec_contract(self):
+        df = load_mapped_data(TEMP_ELECTRA, self.electra_mapping)
         client_a = df[df['customer_id'] == "377001"].iloc[0]
         self.assertEqual(str(client_a['tax_id']), "123")
         self.assertEqual(str(client_a['iec_contract']), "111")
 
-    def test_electra_loader_calculates_consumption_correctly(self):
-        """Verify Phase 2 calculations: sum quantities and separate peak/off-peak."""
-        df = load_electra_data(TEMP_ELECTRA)
-        # Client 377001 has two 'Detail usage' lines: 300 (off-peak/לילה) and 700 (peak/פסגה)
+    def test_mapped_loader_calculates_consumption_correctly(self):
+        """Verify Phase 2 calculation: sum Quantity for 'Detail usage' lines."""
+        df = load_mapped_data(TEMP_ELECTRA, self.electra_mapping)
+        # Client 377001 has two 'Detail usage' lines: 300 + 700
         client_a = df[df['customer_id'] == "377001"].iloc[0]
-        
+
         self.assertEqual(client_a['total_kwh'], 1000.0)
-        self.assertEqual(client_a['offpeak_kwh'], 300.0)
-        self.assertEqual(client_a['peak_kwh'], 700.0)
-        
+
         # Client 377002 only has 'Detail recurring', so total_kwh should be NaN/None
         client_b = df[df['customer_id'] == "377002"].iloc[0]
         self.assertTrue(pd.isna(client_b['total_kwh']))
 
-    def test_electra_loader_calculates_financial_charges_correctly(self):
+    def test_mapped_loader_calculates_financial_charges_correctly(self):
         """Verify Phase 3 calculations: total payment and KVA fixed charge (both from LineTotalAmount)."""
-        df = load_electra_data(TEMP_ELECTRA)
+        df = load_mapped_data(TEMP_ELECTRA, self.electra_mapping)
         # Client 377001 lines: 900 + 2100 + 45 = 3045 total payment; KVA line's LineTotalAmount is 45
         client_a = df[df['customer_id'] == "377001"].iloc[0]
 
         self.assertEqual(client_a['total_payment'], 3045.0)
         self.assertEqual(client_a['kva_fixed_charge'], 45.0)
+
+    def test_mapped_loader_customer_name_pulled_from_line_items_sheet(self):
+        """customer_name in the default mapping lives on the DRFT sheet, not the primary sheet."""
+        df = load_mapped_data(TEMP_ELECTRA, self.electra_mapping)
+        client_a = df[df['customer_id'] == "377001"].iloc[0]
+        self.assertEqual(client_a['customer_name'], "Client A")
+
+    def test_mapped_loader_unmapped_field_stays_none(self):
+        """tou/billing_type/tariff aren't in the default mapping's field_mappings; must stay None, not crash."""
+        df = load_mapped_data(TEMP_ELECTRA, self.electra_mapping)
+        self.assertTrue(df['tou'].isna().all())
+        self.assertTrue(df['billing_type'].isna().all())
+        self.assertTrue(df['tariff'].isna().all())
 
 
 if __name__ == "__main__":

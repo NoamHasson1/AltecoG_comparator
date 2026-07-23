@@ -147,9 +147,7 @@ class ReconciliationEngine:
 
     def run_step_2_consumption(self):
         fields_to_check = {
-            "total_kwh": ("Total Consumption (kWh)", "סה״כ צריכה קוט״ש"),
-            "offpeak_kwh": ("Off-Peak Consumption (kWh)", "צריכה בשפל קוט״ש"),
-            "peak_kwh": ("Peak Consumption (kWh)", "צריכה בפסגה קוט״ש")
+            "total_kwh": ("Total Consumption (kWh)", "סה״כ צריכה קוט״ש")
         }
 
         tolerance = 0.5
