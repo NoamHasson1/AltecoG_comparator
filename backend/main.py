@@ -24,9 +24,10 @@ def main():
     df_step0 = results["step0"]
     df_step1 = results["step1"]
     df_step2 = results["step2"]
+    df_step3 = results["step3"]
 
-    if not df_step0.empty or not df_step1.empty or not df_step2.empty:
-        total_errors = len(df_step0) + len(df_step1) + len(df_step2)
+    if not df_step0.empty or not df_step1.empty or not df_step2.empty or not df_step3.empty:
+        total_errors = len(df_step0) + len(df_step1) + len(df_step2) + len(df_step3)
         print(f"Found {total_errors} mismatches! Saving report...")
 
         os.makedirs(os.path.dirname(output_report_path), exist_ok=True)
@@ -38,7 +39,9 @@ def main():
                 df_step1.to_excel(writer, index=False, sheet_name="Phase 1 - Metadata")
             if not df_step2.empty:
                 df_step2.to_excel(writer, index=False, sheet_name="Phase 2 - Consumption")
-                
+            if not df_step3.empty:
+                df_step3.to_excel(writer, index=False, sheet_name="Phase 3 - Financials")
+
         print(f"Success! Report saved to: {output_report_path}")
     else:
         print("Amazing! No mismatches found between the files.")

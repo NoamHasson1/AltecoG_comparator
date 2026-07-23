@@ -145,9 +145,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Render Phase 2
             renderPhaseData(
-                results.step2, 
-                'step2-table-container', 
+                results.step2,
+                'step2-table-container',
                 'step2-badge'
+            );
+
+            // Render Phase 3
+            renderPhaseData(
+                results.step3,
+                'step3-table-container',
+                'step3-badge'
             );
 
             // Scroll down slightly so results are clearly visible

@@ -45,7 +45,8 @@ async def reconcile_files(alteco_file: UploadFile = File(...), electra_file: Upl
         response_data = {
             "step0": results_dict["step0"].to_dict(orient='records'),
             "step1": results_dict["step1"].to_dict(orient='records'),
-            "step2": results_dict["step2"].to_dict(orient='records')
+            "step2": results_dict["step2"].to_dict(orient='records'),
+            "step3": results_dict["step3"].to_dict(orient='records')
         }
         
         return JSONResponse(content=jsonable_encoder(response_data))

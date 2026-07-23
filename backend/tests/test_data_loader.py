@@ -35,22 +35,24 @@ class TestDataLoader(unittest.TestCase):
             "מספר מונה": ["M-11111", " M-22222 ", "M-33333"],
             "סטטוס מתקן": ["פעיל", "פעיל", "מפורק"],
             "מספר לקוח": ["377001", "377002", "377003"],
-            "ת.ז./ח.פ.": ["123", "456", "789"],
+            "ת.ז/ח.פ": ["123", "456", "789"],
             "מספר חח״י": ["111", "222", "333"],
             "תאריך הצטרפות": ["2023-09-01", "2023-09-01", "2023-09-01"]
         }
         df_meta = pd.DataFrame(electra_meta_data)
 
         # Added required columns for Phase 2 (Quantity, DraftLineType, Description)
+        # and Phase 3 (LineTotalAmount, KVA/Supply/Distribution description lines)
         electra_drft_data = {
-            "AccountExtID": ["377001", "377001", "377002", "377003"],
-            "AccountName": ["Client A", "Client A", "Client B", "Client C"],
-            "draftDate": ["2026-05-31", "2026-05-31", "2026-05-31", "2026-05-31"],
-            "draftLineFrom": ["2026-05-01", "2026-05-01", "2026-05-01", "2026-05-01"],
-            "draftLineTo": ["2026-06-01", "2026-06-01", "2026-06-01", "2026-06-01"],
-            "DraftLineType": ["Detail usage", "Detail usage", "Detail recurring", "Detail usage"],
-            "draftLineDescription": ["לילה - צריכה", "פסגה - צריכה", "תשלום קבוע", "רגיל"],
-            "Quantity": [300, 700, 1, 500]
+            "AccountExtID": ["377001", "377001", "377001", "377002", "377003"],
+            "AccountName": ["Client A", "Client A", "Client A", "Client B", "Client C"],
+            "draftDate": ["2026-05-31", "2026-05-31", "2026-05-31", "2026-05-31", "2026-05-31"],
+            "draftLineFrom": ["2026-05-01", "2026-05-01", "2026-05-01", "2026-05-01", "2026-05-01"],
+            "draftLineTo": ["2026-06-01", "2026-06-01", "2026-06-01", "2026-06-01", "2026-06-01"],
+            "DraftLineType": ["Detail usage", "Detail usage", "Detail recurring", "Detail recurring", "Detail usage"],
+            "draftLineDescription": ["לילה - צריכה", "פסגה - צריכה", "KVA - פרטיים", "תשלום קבוע", "רגיל"],
+            "Quantity": [300, 700, 15, 1, 500],
+            "LineTotalAmount": [900, 2100, 45, 10, 1500]
         }
         df_drft = pd.DataFrame(electra_drft_data)
 
@@ -74,6 +76,13 @@ class TestDataLoader(unittest.TestCase):
         self.assertEqual(len(df), 2)
         self.assertNotIn("M-33333", df["meter_number"].values)
 
+    def test_electra_loader_maps_tax_id_and_iec_contract(self):
+        """Regression test: these were silently None due to mismatched Hebrew column punctuation."""
+        df = load_electra_data(TEMP_ELECTRA)
+        client_a = df[df['customer_id'] == "377001"].iloc[0]
+        self.assertEqual(str(client_a['tax_id']), "123")
+        self.assertEqual(str(client_a['iec_contract']), "111")
+
     def test_electra_loader_calculates_consumption_correctly(self):
         """Verify Phase 2 calculations: sum quantities and separate peak/off-peak."""
         df = load_electra_data(TEMP_ELECTRA)
@@ -87,6 +96,15 @@ class TestDataLoader(unittest.TestCase):
         # Client 377002 only has 'Detail recurring', so total_kwh should be NaN/None
         client_b = df[df['customer_id'] == "377002"].iloc[0]
         self.assertTrue(pd.isna(client_b['total_kwh']))
+
+    def test_electra_loader_calculates_financial_charges_correctly(self):
+        """Verify Phase 3 calculations: total payment and KVA fixed charge (both from LineTotalAmount)."""
+        df = load_electra_data(TEMP_ELECTRA)
+        # Client 377001 lines: 900 + 2100 + 45 = 3045 total payment; KVA line's LineTotalAmount is 45
+        client_a = df[df['customer_id'] == "377001"].iloc[0]
+
+        self.assertEqual(client_a['total_payment'], 3045.0)
+        self.assertEqual(client_a['kva_fixed_charge'], 45.0)
 
 
 if __name__ == "__main__":

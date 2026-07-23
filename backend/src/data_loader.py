@@ -21,7 +21,13 @@ STANDARD_SCHEMA = [
     # Step 2: Consumption (kWh)
     "total_kwh",
     "offpeak_kwh",
-    "peak_kwh"
+    "peak_kwh",
+
+    # Step 3: Financial Reconciliation
+    "total_payment",
+    "kva_fixed_charge",
+    "supply_fixed_charge",
+    "distribution_fixed_charge"
 ]
 
 def load_alteco_data(file_path):
@@ -50,7 +56,13 @@ def load_alteco_data(file_path):
         # Step 2: Consumption
         "סה״כ צריכה קוט״ש": "total_kwh",
         "צריכה בשפל קוט״ש": "offpeak_kwh",
-        "צריכה בפסגה קוט״ש": "peak_kwh"
+        "צריכה בפסגה קוט״ש": "peak_kwh",
+
+        # Step 3: Financial Reconciliation
+        "סה״כ לתשלום (כולל מע״מ) ₪": "total_payment",
+        "חיוב קבוע KVA ₪": "kva_fixed_charge",
+        "חיוב קבוע אספקה  ₪": "supply_fixed_charge",
+        "חיוב קבוע חלוקה ₪": "distribution_fixed_charge"
     }
     df = df.rename(columns=rename_map)
     
@@ -98,8 +110,8 @@ def _extract_electra_metadata(df_meta, df_drft):
         "derived_month": "billing_month",
         "מספר לקוח": "customer_id",
         "AccountName": "customer_name",
-        "ת.ז./ח.פ.": "tax_id",
-        'מספר חח"י': "iec_contract",
+        "ת.ז/ח.פ": "tax_id",
+        "מספר חח״י": "iec_contract",
         "מספר מונה": "meter_number",
         "מתח": "voltage",
         "קבוע": "fixed_payment",
@@ -147,6 +159,39 @@ def _calculate_electra_consumption(df_drft):
     return consumption_summary
 
 
+def _calculate_electra_charges(df_drft):
+    """
+    Helper Function (Step 3): Aggregates per-customer financial totals from DRFT
+    for comparison against Alteco's fixed-charge and total payment columns.
+    """
+    charges_df = df_drft.copy()
+    charges_df['AccountExtID'] = charges_df['AccountExtID'].astype(str).str.strip()
+    charges_df['LineTotalAmount'] = pd.to_numeric(charges_df['LineTotalAmount'], errors='coerce').fillna(0)
+
+    # 1. TOTAL PAYMENT: sum every line's LineTotalAmount per customer (whole invoice)
+    total_payment = charges_df.groupby('AccountExtID')['LineTotalAmount'].sum().reset_index()
+    total_payment = total_payment.rename(columns={'LineTotalAmount': 'total_payment'})
+
+    # 2. FIXED CHARGES: sum LineTotalAmount (₪) for lines whose description matches each charge type
+    def _sum_amount_by_keyword(keyword, out_col):
+        matches = charges_df[charges_df['draftLineDescription'].str.contains(keyword, na=False, regex=False)]
+        summed = matches.groupby('AccountExtID')['LineTotalAmount'].sum().reset_index()
+        return summed.rename(columns={'LineTotalAmount': out_col})
+
+    kva_charge = _sum_amount_by_keyword('KVA', 'kva_fixed_charge')
+    supply_charge = _sum_amount_by_keyword('אספקה', 'supply_fixed_charge')
+    distribution_charge = _sum_amount_by_keyword('חלוקה', 'distribution_fixed_charge')
+
+    # 3. Merge all charge calculations together
+    charges_summary = total_payment
+    for charge_df in [kva_charge, supply_charge, distribution_charge]:
+        charges_summary = pd.merge(charges_summary, charge_df, on='AccountExtID', how='left')
+
+    charges_summary = charges_summary.rename(columns={'AccountExtID': 'customer_id'})
+
+    return charges_summary
+
+
 # --- MAIN LOADER FUNCTION ---
 
 def load_electra_data(file_path):
@@ -163,10 +208,14 @@ def load_electra_data(file_path):
     
     # --- Phase 2: Get Calculated Consumption ---
     consumption_df = _calculate_electra_consumption(df_drft)
-    
+
+    # --- Phase 3: Get Calculated Financial Charges ---
+    charges_df = _calculate_electra_charges(df_drft)
+
     # --- Join the data together! ---
-    # We do a left join so metadata exists even if a customer had 0 consumption this month
+    # We do a left join so metadata exists even if a customer had 0 consumption/charges this month
     electra_unified = pd.merge(metadata_df, consumption_df, on="customer_id", how="left")
+    electra_unified = pd.merge(electra_unified, charges_df, on="customer_id", how="left")
 
     # Ensure all STANDARD_SCHEMA columns exist (fill with None if missing)
     for col in STANDARD_SCHEMA:
