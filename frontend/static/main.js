@@ -129,32 +129,38 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reveal the results section
             resultsContainer.style.display = 'flex';
 
+            renderSummaryStrip(results);
+
             // Render Phase 0
             renderPhaseData(
                 results.step0,
                 'step0-table-container',
-                'step0-badge'
+                'step0-badge',
+                'step0-search'
             );
 
             // Render Phase 1
             renderPhaseData(
-                results.step1, 
-                'step1-table-container', 
-                'step1-badge'
+                results.step1,
+                'step1-table-container',
+                'step1-badge',
+                'step1-search'
             );
 
             // Render Phase 2
             renderPhaseData(
                 results.step2,
                 'step2-table-container',
-                'step2-badge'
+                'step2-badge',
+                'step2-search'
             );
 
             // Render Phase 3
             renderPhaseData(
                 results.step3,
                 'step3-table-container',
-                'step3-badge'
+                'step3-badge',
+                'step3-search'
             );
 
             // Scroll down slightly so results are clearly visible
@@ -170,27 +176,77 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    function renderPhaseData(dataArray, containerId, badgeId) {
+    function renderSummaryStrip(results) {
+        const strip = document.getElementById('summary-strip');
+        const tiles = [
+            { label: 'Coverage Gaps', count: (results.step0 || []).length },
+            { label: 'Metadata Issues', count: (results.step1 || []).length },
+            { label: 'Consumption Issues', count: (results.step2 || []).length },
+            { label: 'Financial Issues', count: (results.step3 || []).length },
+        ];
+
+        strip.innerHTML = tiles.map(t => `
+            <div class="stat-tile ${t.count === 0 ? 'is-clean' : 'is-flagged'}">
+                <span class="stat-label">${t.label}</span>
+                <div class="stat-value">${t.count}</div>
+            </div>
+        `).join('');
+    }
+
+    function renderPhaseData(dataArray, containerId, badgeId, searchId) {
         const container = document.getElementById(containerId);
         const badge = document.getElementById(badgeId);
+        const searchInput = document.getElementById(searchId);
 
+        // Badge always reflects the full mismatch count, independent of any search filter.
         if (!dataArray || dataArray.length === 0) {
             badge.textContent = '0 Issues';
             badge.className = 'badge success';
-            container.innerHTML = '<p class="success-msg">Perfect match! No discrepancies found for this phase.</p>';
-        } else {
-            badge.textContent = `${dataArray.length} Mismatches`;
-            badge.className = 'badge error';
-            container.innerHTML = createTable(dataArray);
+            container.innerHTML = '<p class="success-msg">No discrepancies found.</p>';
+            if (searchInput) {
+                searchInput.style.display = 'none';
+                searchInput.value = '';
+            }
+            return;
+        }
+
+        badge.textContent = `${dataArray.length} Mismatches`;
+        badge.className = 'badge error';
+        container.innerHTML = createTable(dataArray);
+
+        if (searchInput) {
+            searchInput.style.display = 'block';
+            searchInput.value = '';
+            searchInput.oninput = () => {
+                const term = searchInput.value.trim().toLowerCase();
+                const filtered = term === '' ? dataArray : dataArray.filter(row => rowMatchesSearch(row, term));
+                container.innerHTML = filtered.length > 0
+                    ? createTable(filtered)
+                    : '<p class="no-results-msg">No results match your search.</p>';
+            };
         }
     }
 
+    // Matches against every column in the row (Customer ID, Client Name, Meter Number,
+    // Original Field (Hebrew), etc.) since the exact set of columns differs by phase.
+    function rowMatchesSearch(row, term) {
+        return Object.values(row).some((value) =>
+            value !== null && value !== undefined && String(value).toLowerCase().includes(term)
+        );
+    }
+
+    // Columns holding IDs or numeric figures get a monospace/tabular treatment so values line up.
+    const MONO_COLUMNS = new Set(['Meter Number', 'Customer ID', 'Value', 'Alteco Value', 'Client Value']);
+
     function createTable(data) {
         const headers = Object.keys(data[0]).filter(h => h !== 'Phase');
-        
+
         const headerHtml = headers.map(h => `<th>${h}</th>`).join('');
         const bodyHtml = data.map(row => {
-            const cells = headers.map(h => `<td>${row[h]}</td>`).join('');
+            const cells = headers.map(h => {
+                const cls = MONO_COLUMNS.has(h) ? ' class="cell-mono"' : '';
+                return `<td${cls}>${row[h]}</td>`;
+            }).join('');
             return `<tr>${cells}</tr>`;
         }).join('');
 
