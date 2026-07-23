@@ -10,10 +10,43 @@ class ReconciliationEngine:
     def __init__(self, df_alteco, df_client):
         self.df_alteco = df_alteco
         self.df_client = df_client
+        self.discrepancies_step0 = []
         self.discrepancies_step1 = []
         self.discrepancies_step2 = []
-        
-        self.merged = pd.merge(self.df_alteco, self.df_client, on="meter_number", suffixes=('_Alteco', '_Client'))
+
+        self.merged = pd.merge(
+            self.df_alteco, self.df_client, on="meter_number",
+            suffixes=('_Alteco', '_Client'), how="outer", indicator=True
+        )
+        # Step 1 & 2 only make sense for meters present on both sides.
+        self.matched = self.merged[self.merged["_merge"] == "both"]
+
+    def run_step_0_coverage(self):
+        """
+        Meters present in only one of the two files are a coverage gap:
+        either Alteco is billing a meter Electra has no record of, or
+        Electra has an active meter Alteco never billed.
+        """
+        alteco_only = self.merged[self.merged["_merge"] == "left_only"]
+        client_only = self.merged[self.merged["_merge"] == "right_only"]
+
+        for _, row in alteco_only.iterrows():
+            logging.warning(f"COVERAGE GAP: Meter '{row['meter_number']}' present in Alteco but missing from Electra")
+            self.discrepancies_step0.append({
+                "Meter Number": row["meter_number"],
+                "Client Name": row.get("customer_name_Alteco"),
+                "Customer ID": row.get("customer_id_Alteco"),
+                "Issue": "Missing from Electra"
+            })
+
+        for _, row in client_only.iterrows():
+            logging.warning(f"COVERAGE GAP: Meter '{row['meter_number']}' present in Electra but missing from Alteco")
+            self.discrepancies_step0.append({
+                "Meter Number": row["meter_number"],
+                "Client Name": row.get("customer_name_Client"),
+                "Customer ID": row.get("customer_id_Client"),
+                "Issue": "Missing from Alteco"
+            })
 
     def run_step_1_metadata(self):
         fields_to_check = {
@@ -34,10 +67,10 @@ class ReconciliationEngine:
             "kva": ("KVA", "KVA")
         }
         
-        for _, row in self.merged.iterrows():
+        for _, row in self.matched.iterrows():
             meter_num = row["meter_number"]
             client_name = row.get("customer_name_Alteco", "Unknown Client")
-            
+
             for field, display_name in fields_to_check.items():
                 name_en, name_he = display_name
                 val_alteco = row.get(f"{field}_Alteco") 
@@ -96,10 +129,10 @@ class ReconciliationEngine:
         
         tolerance = 0.5 
         
-        for _, row in self.merged.iterrows():
+        for _, row in self.matched.iterrows():
             meter_num = row["meter_number"]
             client_name = row.get("customer_name_Alteco", "Unknown Client")
-            
+
             for field, display_name in fields_to_check.items():
                 name_en, name_he = display_name
                 val_alteco = row.get(f"{field}_Alteco") 
@@ -138,16 +171,20 @@ class ReconciliationEngine:
         """
         Orchestrator: Runs all phases and returns a dictionary with separate DataFrames.
         """
+        self.discrepancies_step0 = []
         self.discrepancies_step1 = []
         self.discrepancies_step2 = []
-        
+
+        self.run_step_0_coverage()
         self.run_step_1_metadata()
         self.run_step_2_consumption()
-        
+
+        df_step0 = pd.DataFrame(self.discrepancies_step0).replace({pd.NaT: None, pd.NA: None, float('nan'): None})
         df_step1 = pd.DataFrame(self.discrepancies_step1).replace({pd.NaT: None, pd.NA: None, float('nan'): None})
         df_step2 = pd.DataFrame(self.discrepancies_step2).replace({pd.NaT: None, pd.NA: None, float('nan'): None})
-        
+
         return {
+            "step0": df_step0,
             "step1": df_step1,
             "step2": df_step2
         }

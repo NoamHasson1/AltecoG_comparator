@@ -43,6 +43,7 @@ async def reconcile_files(alteco_file: UploadFile = File(...), electra_file: Upl
         results_dict = engine.run_all_steps()
 
         response_data = {
+            "step0": results_dict["step0"].to_dict(orient='records'),
             "step1": results_dict["step1"].to_dict(orient='records'),
             "step2": results_dict["step2"].to_dict(orient='records')
         }

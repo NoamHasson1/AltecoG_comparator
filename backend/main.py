@@ -21,16 +21,19 @@ def main():
     engine = ReconciliationEngine(df_alteco, df_electra)
     
     results = engine.run_all_steps()
+    df_step0 = results["step0"]
     df_step1 = results["step1"]
     df_step2 = results["step2"]
-    
-    if not df_step1.empty or not df_step2.empty:
-        total_errors = len(df_step1) + len(df_step2)
+
+    if not df_step0.empty or not df_step1.empty or not df_step2.empty:
+        total_errors = len(df_step0) + len(df_step1) + len(df_step2)
         print(f"Found {total_errors} mismatches! Saving report...")
 
         os.makedirs(os.path.dirname(output_report_path), exist_ok=True)
-        
+
         with pd.ExcelWriter(output_report_path, engine='openpyxl') as writer:
+            if not df_step0.empty:
+                df_step0.to_excel(writer, index=False, sheet_name="Phase 0 - Coverage")
             if not df_step1.empty:
                 df_step1.to_excel(writer, index=False, sheet_name="Phase 1 - Metadata")
             if not df_step2.empty:

@@ -23,6 +23,7 @@ class TestReconciliationEngine(unittest.TestCase):
         engine = ReconciliationEngine(df_alteco, df_client)
         results = engine.run_all_steps()
 
+        self.assertTrue(results["step0"].empty)
         self.assertTrue(results["step1"].empty)
         self.assertTrue(results["step2"].empty)
 
@@ -89,6 +90,35 @@ class TestReconciliationEngine(unittest.TestCase):
         
         self.assertEqual(len(results["step2"]), 1)
         self.assertIn("Total Consumption (kWh)", results["step2"]["Mismatched Field"].values)
+
+    def test_step0_flags_meter_missing_from_electra(self):
+        """A meter Alteco bills that Electra has no record of should surface as a coverage gap."""
+        df_alteco = pd.DataFrame([{"meter_number": "M-ORPHAN", "customer_name": "Ghost Client"}])
+        df_client = pd.DataFrame([{"meter_number": "M-OTHER", "customer_name": "Other Client"}])
+
+        engine = ReconciliationEngine(df_alteco, df_client)
+        results = engine.run_all_steps()
+        df_step0 = results["step0"]
+
+        self.assertEqual(len(df_step0), 2)
+        orphan_row = df_step0[df_step0["Meter Number"] == "M-ORPHAN"].iloc[0]
+        self.assertEqual(orphan_row["Issue"], "Missing from Electra")
+
+        other_row = df_step0[df_step0["Meter Number"] == "M-OTHER"].iloc[0]
+        self.assertEqual(other_row["Issue"], "Missing from Alteco")
+
+        # Meters missing from one side shouldn't be checked in Step 1/2 at all.
+        self.assertTrue(results["step1"].empty)
+        self.assertTrue(results["step2"].empty)
+
+    def test_step0_empty_when_all_meters_match(self):
+        df_alteco = pd.DataFrame([{"meter_number": "M-MATCH", "customer_name": "Same Client"}])
+        df_client = pd.DataFrame([{"meter_number": "M-MATCH", "customer_name": "Same Client"}])
+
+        engine = ReconciliationEngine(df_alteco, df_client)
+        results = engine.run_all_steps()
+
+        self.assertTrue(results["step0"].empty)
 
 
 if __name__ == "__main__":

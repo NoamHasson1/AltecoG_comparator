@@ -128,7 +128,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Reveal the results section
             resultsContainer.style.display = 'flex';
-            
+
+            // Render Phase 0
+            renderPhaseData(
+                results.step0,
+                'step0-table-container',
+                'step0-badge'
+            );
+
             // Render Phase 1
             renderPhaseData(
                 results.step1, 
