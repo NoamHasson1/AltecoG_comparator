@@ -754,6 +754,10 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Pick a saved mapping from the dropdown first.');
             return;
         }
+        if (name === 'electra_default') {
+            alert('The bundled "electra_default" mapping is protected and can\'t be deleted.');
+            return;
+        }
         if (!confirm(`Delete the saved mapping "${name}"? This can't be undone.`)) return;
         try {
             const response = await fetch(`/mappings/${encodeURIComponent(name)}`, { method: 'DELETE' });
@@ -766,12 +770,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function onResetAllMappingsClick() {
-        if (!confirm('Delete every saved mapping on the server — including the bundled default? This can\'t be undone.')) return;
+        if (!confirm('Delete every saved mapping except the bundled default? This can\'t be undone.')) return;
         try {
             const response = await fetch('/mappings', { method: 'DELETE' });
             if (response.status !== 200) throw new Error('Reset failed');
             loadSavedMappingsList();
-            document.getElementById('mapping-save-status').textContent = 'All saved mappings deleted.';
+            document.getElementById('mapping-save-status').textContent = 'All saved mappings deleted (default kept).';
         } catch (e) {
             alert(`Error resetting mappings: ${e.message}`);
         }

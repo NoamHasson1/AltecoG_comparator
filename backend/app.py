@@ -22,6 +22,10 @@ BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(os.path.dirname(BACKEND_DIR), "frontend")
 MAPPINGS_DIR = os.path.join(BACKEND_DIR, "mappings")
 
+# Bundled preset that main.py and the test suite depend on always existing —
+# protected from deletion so "Reset All" / single-delete can't take it out.
+PROTECTED_MAPPING_NAME = "electra_default"
+
 # Mount the 'static' directory to serve CSS and JS files
 app.mount("/static", StaticFiles(directory=os.path.join(FRONTEND_DIR, "static")), name="static")
 
@@ -94,6 +98,8 @@ async def save_mapping(name: str, mapping: dict):
 async def delete_mapping(name: str):
     """Deletes a single saved mapping by name."""
     filename = _safe_mapping_filename(name)
+    if filename == PROTECTED_MAPPING_NAME:
+        raise HTTPException(status_code=400, detail="The bundled default mapping can't be deleted.")
     path = os.path.join(MAPPINGS_DIR, f"{filename}.json")
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail=f"No saved mapping named '{name}'")
@@ -103,10 +109,10 @@ async def delete_mapping(name: str):
 
 @app.delete("/mappings")
 async def delete_all_mappings():
-    """Deletes every saved mapping, including the bundled default."""
+    """Deletes every saved mapping except the bundled default (main.py and the tests depend on it existing)."""
     if os.path.isdir(MAPPINGS_DIR):
         for f in os.listdir(MAPPINGS_DIR):
-            if f.endswith(".json"):
+            if f.endswith(".json") and f[:-5] != PROTECTED_MAPPING_NAME:
                 os.remove(os.path.join(MAPPINGS_DIR, f))
     return JSONResponse(content={"status": "cleared"})
 
