@@ -21,7 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeFilterState = { enabled: false, sheet: '', column: '', value: '' };
     let lineItemsState = { sheet: '', group_by_column: '' };
     let calcState = {};         // calc field key -> {value_column, filter: {column, match_type, values}}
-    let saveNameDraft = '';
 
     function escapeHtml(str) {
         return String(str).replace(/[&<>"']/g, (c) => ({
@@ -101,6 +100,37 @@ document.addEventListener('DOMContentLoaded', () => {
     setupDropZone(electraZone, (file) => { electraFile = file; }, () => { electraFile = null; }, handleElectraFileChange);
 
     continueBtn.addEventListener('click', () => goToStep(2));
+
+    // ============ Saved-mappings popover (static markup, wired once) ============
+    const mappingsMenuBtn = document.getElementById('mappings-menu-btn');
+    const mappingsPopover = document.getElementById('mappings-popover');
+
+    function closeMappingsPopover() {
+        mappingsPopover.classList.remove('is-open');
+        mappingsMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    mappingsMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = mappingsPopover.classList.toggle('is-open');
+        mappingsMenuBtn.setAttribute('aria-expanded', String(isOpen));
+        if (isOpen) loadSavedMappingsList();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!mappingsPopover.classList.contains('is-open')) return;
+        if (mappingsPopover.contains(e.target) || mappingsMenuBtn.contains(e.target)) return;
+        closeMappingsPopover();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeMappingsPopover();
+    });
+
+    document.getElementById('load-mapping-btn').addEventListener('click', onLoadMappingClick);
+    document.getElementById('save-mapping-btn').addEventListener('click', onSaveMappingClick);
+    document.getElementById('delete-mapping-btn').addEventListener('click', onDeleteMappingClick);
+    document.getElementById('reset-all-mappings-btn').addEventListener('click', onResetAllMappingsClick);
 
     // ============ Field Definitions ============
     const DIRECT_FIELDS = [
@@ -185,6 +215,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         return '';
+    }
+
+    // Up to `limit` example rows for a column, shown on both the draggable
+    // source card and the filled drop-zone so the user can eyeball a match.
+    function sampleValuesFor(sheetName, column, limit) {
+        const sheet = sheetsData && sheetsData.find((s) => s.name === sheetName);
+        if (!sheet) return [];
+        return sheet.sample_rows.slice(0, limit || 3).map((row) => {
+            const v = row[column];
+            return (v === null || v === undefined || v === '') ? '—' : String(v);
+        });
     }
 
     // ============ Palette popover (sheet or column picker) ============
@@ -381,18 +422,51 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============ Rendering the mapping game ============
-    function fieldSlotHtml(field) {
+
+    // Left sidebar: every column from every sheet, grouped, draggable onto a slot.
+    function sourceSidebarHtml() {
+        if (!sheetsData) return '';
+        const usedKeys = new Set();
+        DIRECT_FIELDS.forEach((f) => {
+            const cfg = fieldMatches[f.key];
+            if (cfg && cfg.sheet && cfg.column) usedKeys.add(`${cfg.sheet}|${cfg.column}`);
+        });
+
+        return sheetsData.map((sheet) => `
+            <div class="sheet-group-label">${escapeHtml(sheet.name)}</div>
+            ${sheet.columns.map((col) => {
+                const isUsed = usedKeys.has(`${sheet.name}|${col}`);
+                const samples = sampleValuesFor(sheet.name, col, 3);
+                return `
+                    <div class="source-card ${isUsed ? 'is-used' : ''}" draggable="true" data-sheet="${escapeHtml(sheet.name)}" data-col="${escapeHtml(col)}">
+                        <div class="source-card-head"><span class="drag-handle">⠿</span> ${escapeHtml(col)}</div>
+                        <div class="source-samples">${samples.map((s, i) => `<div class="source-sample-row"><span class="source-sample-idx">${i + 1}</span>${escapeHtml(s)}</div>`).join('')}</div>
+                    </div>
+                `;
+            }).join('')}
+        `).join('');
+    }
+
+    // Right side: one drop-target slot per direct field (Alteco's fixed fields).
+    function directSlotHtml(field) {
         const cfg = fieldMatches[field.key];
         const isMatched = !!(cfg && cfg.sheet && cfg.column);
-        const sample = isMatched ? sampleValueFor(cfg.sheet, cfg.column) : '';
         const deriveChecked = field.derivable && cfg && cfg.mode === 'derive_from_date';
+
+        const dropZoneInner = isMatched
+            ? `<span class="filled-sheet-tag">${escapeHtml(cfg.sheet)}</span>
+               <div class="filled-head">${escapeHtml(cfg.column)}</div>
+               <div class="filled-samples">${sampleValuesFor(cfg.sheet, cfg.column, 3).map((s, i) => `<div class="filled-sample-row"><span class="filled-sample-idx">${i + 1}</span>${escapeHtml(s)}</div>`).join('')}</div>`
+            : `<span class="drop-zone-prompt">Drag a column here<br>or <span class="map-select-link">select</span></span>`;
+
         return `
-            <div class="field-slot ${isMatched ? 'is-matched' : ''} ${field.required ? 'is-required' : ''}" data-field="${field.key}">
-                <div class="field-slot-label">${escapeHtml(field.label)}</div>
-                <div class="field-slot-status">${isMatched ? `${escapeHtml(cfg.column)}${sample ? ' · ' + escapeHtml(sample) : ''}` : 'Click to choose a column'}</div>
-                <div class="check-badge">✓</div>
-                <button type="button" class="unmatch-x" aria-label="Remove match">✕</button>
-                ${field.derivable ? `<label class="map-derive"><input type="checkbox" class="map-derive-toggle" ${deriveChecked ? 'checked' : ''}> Derive month from this date</label>` : ''}
+            <div class="slot" data-field="${field.key}">
+                <div class="slot-label ${field.required ? 'slot-required' : ''}">
+                    <span class="slot-label-text">${escapeHtml(field.label)}</span>
+                    <span class="map-clear-link" style="${isMatched ? '' : 'display:none;'}">Clear</span>
+                </div>
+                <div class="map-drop-zone ${isMatched ? 'is-filled' : ''}">${dropZoneInner}</div>
+                ${field.derivable && isMatched ? `<label class="map-derive"><input type="checkbox" class="map-derive-toggle" ${deriveChecked ? 'checked' : ''}> Derive month from this date</label>` : ''}
             </div>
         `;
     }
@@ -497,18 +571,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderMappingPanel() {
         mappingRoot.innerHTML = `
-            <div class="mapping-saved-row">
-                <select id="saved-mapping-select"><option value="">— Load a saved mapping —</option></select>
-                <button type="button" class="btn-ghost" id="load-mapping-btn">Load</button>
-                <button type="button" class="btn-ghost btn-danger-ghost" id="delete-mapping-btn">Delete</button>
-                <span class="mapping-save-spacer"></span>
-                <input type="text" id="save-mapping-name" placeholder="Mapping name" value="${escapeHtml(saveNameDraft)}">
-                <button type="button" class="btn-ghost" id="save-mapping-btn">Save As</button>
-                <button type="button" class="btn-ghost btn-danger-ghost" id="reset-all-mappings-btn">Reset All</button>
-                <span id="mapping-save-status" class="mapping-save-status"></span>
-            </div>
-            <p class="mapping-saved-hint">Save your mapping once, then reload it here next time you get a file in the same format — no need to re-match everything. Saved as plain files on the server (<code>backend/mappings/</code>).</p>
-
             <div class="progress-track">
                 <div class="progress-count"><span class="n" id="progress-n">0</span> / <span id="progress-total">0</span> fields matched</div>
                 <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill"></div></div>
@@ -520,7 +582,16 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <h3 class="mapping-group-title">Customer &amp; Contract Details</h3>
-            <div class="field-grid">${DIRECT_FIELDS.map(fieldSlotHtml).join('')}</div>
+            <div class="dragdrop-mapper">
+                <div class="mapper-toolbar">
+                    <span class="mapper-hint">Drag a column from the left onto a field, or click "select"</span>
+                    <button type="button" class="clear-all-link" id="clear-all-direct">Clear All</button>
+                </div>
+                <div class="mapper-body">
+                    <div class="source-sidebar">${sourceSidebarHtml()}</div>
+                    <div class="slots-scroll"><div class="slots-row">${DIRECT_FIELDS.map(directSlotHtml).join('')}</div></div>
+                </div>
+            </div>
             ${activeFilterToggleHtml()}
 
             <h3 class="mapping-group-title">Consumption &amp; Financial Calculations</h3>
@@ -528,11 +599,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="calc-grid">${CALCULATED_FIELDS.map(calcCardHtml).join('')}</div>
         `;
 
-        document.getElementById('load-mapping-btn').addEventListener('click', onLoadMappingClick);
-        document.getElementById('save-mapping-btn').addEventListener('click', onSaveMappingClick);
-        document.getElementById('delete-mapping-btn').addEventListener('click', onDeleteMappingClick);
-        document.getElementById('reset-all-mappings-btn').addEventListener('click', onResetAllMappingsClick);
-        loadSavedMappingsList();
         updateProgressUI();
     }
 
@@ -562,22 +628,67 @@ document.addEventListener('DOMContentLoaded', () => {
         reconcileBtn.disabled = !ready;
     }
 
+    // ============ Drag & drop: source column -> direct field slot ============
+    let draggedSource = null; // {sheet, col}
+
+    mappingRoot.addEventListener('dragstart', (e) => {
+        const card = e.target.closest('.source-card');
+        if (!card) return;
+        draggedSource = { sheet: card.dataset.sheet, col: card.dataset.col };
+        card.classList.add('is-dragging');
+        e.dataTransfer.effectAllowed = 'copy';
+    });
+
+    mappingRoot.addEventListener('dragend', (e) => {
+        const card = e.target.closest('.source-card');
+        if (card) card.classList.remove('is-dragging');
+        draggedSource = null;
+    });
+
+    mappingRoot.addEventListener('dragover', (e) => {
+        const dz = e.target.closest('.map-drop-zone');
+        if (!dz) return;
+        e.preventDefault();
+        dz.classList.add('is-dragover');
+    });
+
+    mappingRoot.addEventListener('dragleave', (e) => {
+        const dz = e.target.closest('.map-drop-zone');
+        if (dz) dz.classList.remove('is-dragover');
+    });
+
+    mappingRoot.addEventListener('drop', (e) => {
+        const dz = e.target.closest('.map-drop-zone');
+        if (!dz) return;
+        e.preventDefault();
+        dz.classList.remove('is-dragover');
+        if (!draggedSource) return;
+        const key = dz.closest('[data-field]').dataset.field;
+        fieldMatches[key] = { ...(fieldMatches[key] || {}), sheet: draggedSource.sheet, column: draggedSource.col };
+        draggedSource = null;
+        renderMappingPanel();
+    });
+
     // ============ Mapping panel event delegation ============
     mappingRoot.addEventListener('click', (e) => {
-        const unmatchBtn = e.target.closest('.unmatch-x');
-        if (unmatchBtn) {
-            e.stopPropagation();
-            const slot = unmatchBtn.closest('[data-field]');
+        const clearAllDirect = e.target.closest('#clear-all-direct');
+        if (clearAllDirect) {
+            DIRECT_FIELDS.forEach((f) => delete fieldMatches[f.key]);
+            renderMappingPanel();
+            return;
+        }
+
+        const clearLink = e.target.closest('.map-clear-link');
+        if (clearLink) {
+            const slot = clearLink.closest('[data-field]');
             delete fieldMatches[slot.dataset.field];
             renderMappingPanel();
             return;
         }
 
-        if (e.target.closest('.map-derive')) return; // handled by the checkbox's own change event
-
-        const directSlot = e.target.closest('.field-slot[data-field]');
-        if (directSlot) {
-            const key = directSlot.dataset.field;
+        const selectLink = e.target.closest('.map-select-link');
+        if (selectLink) {
+            const key = selectLink.closest('[data-field]').dataset.field;
             const field = DIRECT_FIELDS.find((f) => f.key === key);
             openPalette(`Match "${field.label}"`, 'column', null, (sheet, col) => {
                 fieldMatches[key] = { ...(fieldMatches[key] || {}), sheet, column: col };
@@ -585,6 +696,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             return;
         }
+
+        if (e.target.closest('.map-derive')) return; // handled by the checkbox's own change event
 
         const afToggle = e.target.closest('[data-role="af-toggle"]');
         if (afToggle) {
@@ -678,8 +791,6 @@ document.addEventListener('DOMContentLoaded', () => {
     mappingRoot.addEventListener('input', (e) => {
         if (e.target.id === 'af-value') {
             activeFilterState.value = e.target.value;
-        } else if (e.target.id === 'save-mapping-name') {
-            saveNameDraft = e.target.value;
         }
     });
 
@@ -727,7 +838,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function onSaveMappingClick() {
         const status = document.getElementById('mapping-save-status');
-        const name = saveNameDraft.trim();
+        const nameInput = document.getElementById('save-mapping-name');
+        const name = nameInput.value.trim();
         if (!name) {
             alert('Enter a name to save this mapping under.');
             return;

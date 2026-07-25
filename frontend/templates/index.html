@@ -83,9 +83,37 @@
 
         <!-- ============ STEP 2: Field Mapping (game) ============ -->
         <section class="panel" id="panel-2">
-            <div class="panel-head">
-                <h1>Match the fields</h1>
-                <p>Click a field, then pick which column in the client's file it corresponds to. Sample values from the real file are shown to help you confirm each match.</p>
+            <div class="panel-head panel-head-row">
+                <div>
+                    <h1>Match the fields</h1>
+                    <p>Click a field, then pick which column in the client's file it corresponds to. Sample values from the real file are shown to help you confirm each match.</p>
+                </div>
+
+                <div class="mappings-menu">
+                    <button type="button" class="mappings-menu-btn" id="mappings-menu-btn" aria-expanded="false">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z"/></svg>
+                        Saved Mappings
+                    </button>
+                    <div class="mappings-popover" id="mappings-popover">
+                        <div class="mappings-popover-row">
+                            <select id="saved-mapping-select"><option value="">— Load a saved mapping —</option></select>
+                        </div>
+                        <div class="mappings-popover-row">
+                            <button type="button" class="btn-ghost" id="load-mapping-btn">Load</button>
+                            <button type="button" class="btn-ghost btn-danger-ghost" id="delete-mapping-btn">Delete</button>
+                        </div>
+                        <div class="mappings-popover-divider"></div>
+                        <div class="mappings-popover-row">
+                            <input type="text" id="save-mapping-name" placeholder="Mapping name">
+                        </div>
+                        <div class="mappings-popover-row">
+                            <button type="button" class="btn-ghost" id="save-mapping-btn">Save As</button>
+                            <button type="button" class="btn-ghost btn-danger-ghost" id="reset-all-mappings-btn">Reset All</button>
+                        </div>
+                        <p id="mapping-save-status" class="mapping-save-status"></p>
+                        <p class="mapping-saved-hint">Save once, reload here next time you get a file in the same format. Stored on the server (<code>backend/mappings/</code>).</p>
+                    </div>
+                </div>
             </div>
 
             <div id="mapping-root"></div>
