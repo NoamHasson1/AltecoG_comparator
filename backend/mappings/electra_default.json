@@ -10,11 +10,6 @@
     "contract_start_date": {"sheet": "מצבת לקוחות", "column": "תאריך הצטרפות"},
     "kva": {"sheet": "מצבת לקוחות", "column": "KVA"}
   },
-  "active_filter": {
-    "sheet": "מצבת לקוחות",
-    "column": "סטטוס מתקן",
-    "value": "פעיל"
-  },
   "billing_month": {
     "mode": "derive_from_date",
     "sheet": "DRFT",
@@ -26,28 +21,38 @@
   },
   "calculated_fields": {
     "total_kwh": {
+      "sheet": "DRFT",
+      "group_by_column": "AccountExtID",
       "value_column": "Quantity",
       "filters": [
         {"column": "DraftLineType", "match_type": "equals", "values": ["Detail usage"]}
       ]
     },
     "total_payment": {
+      "sheet": "DRFT",
+      "group_by_column": "AccountExtID",
       "value_column": "LineTotalAmount",
       "filters": []
     },
     "kva_fixed_charge": {
+      "sheet": "DRFT",
+      "group_by_column": "AccountExtID",
       "value_column": "LineTotalAmount",
       "filters": [
         {"column": "draftLineDescription", "match_type": "contains_any", "values": ["KVA"]}
       ]
     },
     "supply_fixed_charge": {
+      "sheet": "DRFT",
+      "group_by_column": "AccountExtID",
       "value_column": "LineTotalAmount",
       "filters": [
         {"column": "draftLineDescription", "match_type": "contains_any", "values": ["אספקה"]}
       ]
     },
     "distribution_fixed_charge": {
+      "sheet": "DRFT",
+      "group_by_column": "AccountExtID",
       "value_column": "LineTotalAmount",
       "filters": [
         {"column": "draftLineDescription", "match_type": "contains_any", "values": ["חלוקה"]}

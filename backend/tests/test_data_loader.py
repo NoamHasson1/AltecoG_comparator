@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import unittest
 import pandas as pd
-from src.data_loader import load_alteco_data
+from src.data_loader import load_alteco_data, normalize_id_value
 from src.dynamic_loader import load_mapped_data
 
 TEMP_ALTECO = "temp_alteco_test.xlsx"
@@ -78,10 +78,45 @@ class TestDataLoader(unittest.TestCase):
         self.assertEqual(df.loc[0, "meter_number"], "M-11111")
         self.assertEqual(df.loc[0, "total_kwh"], 1000)
 
-    def test_mapped_loader_filters_dismantled_meters(self):
+    def test_alteco_loader_strips_float_artifact_from_numeric_ids(self):
+        """A blank customer_id cell anywhere in the column forces the whole
+        column to float64 (pandas can't store NaN in an int column), so a
+        clean numeric ID like 377007686 round-trips through Excel as
+        377007686.0. A naive str() would stringify that as "377007686.0" and
+        silently fail to match the clean string ID on the Electra side."""
+        float_artifact_file = "temp_float_artifact_test.xlsx"
+        df = pd.DataFrame({
+            "מספר מונה": ["M-1", "M-2"],
+            "מספר לקוח": [377007686, None],  # None forces float64 dtype
+        })
+        df.to_excel(float_artifact_file, sheet_name="חשבונית חוזה", index=False)
+        try:
+            result = load_alteco_data(float_artifact_file)
+            self.assertEqual(result.loc[0, "customer_id"], "377007686")
+            self.assertNotIn(".0", result.loc[0, "customer_id"])
+            # The genuinely-blank customer_id (row 1) must be recognized as
+            # missing (pd.isna()) — not the literal string "nan", which
+            # would look like a real ID and falsely mismatch against nothing
+            # on the other side (pd.isna("nan") is False; that's the bug).
+            self.assertTrue(pd.isna(result.loc[1, "customer_id"]))
+        finally:
+            if os.path.exists(float_artifact_file):
+                os.remove(float_artifact_file)
+
+    def test_normalize_id_value_cases(self):
+        self.assertEqual(normalize_id_value(377007686.0), "377007686")  # whole-number float -> no ".0"
+        self.assertEqual(normalize_id_value("377007686"), "377007686")  # already a clean string
+        self.assertEqual(normalize_id_value("  M-1  "), "M-1")          # whitespace stripped
+        self.assertIsNone(normalize_id_value(float("nan")))            # real NaN -> None, not "nan"
+        self.assertIsNone(normalize_id_value(None))
+
+    def test_mapped_loader_includes_all_meters_regardless_of_status(self):
+        """There's no active/inactive filtering anymore — a meter marked
+        'מפורק' (dismantled) in the source data is still included; any meter
+        present in the billing data is treated as valid."""
         df = load_mapped_data(TEMP_ELECTRA, self.electra_mapping)
-        self.assertEqual(len(df), 2)
-        self.assertNotIn("M-33333", df["meter_number"].values)
+        self.assertEqual(len(df), 3)
+        self.assertIn("M-33333", df["meter_number"].values)
 
     def test_mapped_loader_maps_tax_id_and_iec_contract(self):
         df = load_mapped_data(TEMP_ELECTRA, self.electra_mapping)

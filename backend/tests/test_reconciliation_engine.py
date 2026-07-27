@@ -107,6 +107,23 @@ class TestReconciliationEngine(unittest.TestCase):
         self.assertEqual(len(results["step2"]), 1)
         self.assertIn("Total Consumption (kWh)", results["step2"]["Mismatched Field"].values)
 
+    def test_step2_flags_consumption_present_on_only_one_side(self):
+        """A meter with a real Electra-computed kWh but a blank Alteco value
+        (e.g. Alteco never billed usage for that meter this month) must be
+        reported, not silently skipped — this used to fall through a
+        both-sides-required guard and produce nothing in Step 2 at all."""
+        df_alteco = pd.DataFrame([{"meter_number": "M-BLANK-KWH", "total_kwh": None}])
+        df_client = pd.DataFrame([{"meter_number": "M-BLANK-KWH", "total_kwh": 250.0}])
+
+        engine = ReconciliationEngine(df_alteco, df_client)
+        results = engine.run_all_steps()
+
+        self.assertEqual(len(results["step2"]), 1)
+        row = results["step2"].iloc[0]
+        self.assertEqual(row["Mismatched Field"], "Total Consumption (kWh)")
+        self.assertIsNone(row["Alteco Value"])
+        self.assertEqual(row["Client Value"], 250.0)
+
     def test_step0_flags_meter_missing_from_electra(self):
         """A meter Alteco bills that Electra has no record of should surface as a coverage gap."""
         df_alteco = pd.DataFrame([{"meter_number": "M-ORPHAN", "customer_name": "Ghost Client"}])
@@ -201,6 +218,97 @@ class TestReconciliationEngine(unittest.TestCase):
         results = engine.run_all_steps()
 
         self.assertTrue(results["step3"].empty)
+
+    # ---- Edge cases ----
+
+    def test_duplicate_meter_number_produces_cross_paired_rows(self):
+        """KNOWN LIMITATION: the merge in __init__ joins purely on meter_number.
+        If the same meter number appears more than once on each side (e.g. a
+        physical meter reassigned to a new customer mid-year — seen in real
+        client data), pandas' merge produces every combination, not just the
+        intended pairing. Two of the four resulting rows here pair the wrong
+        customer together and falsely mismatch on Customer ID."""
+        df_alteco = pd.DataFrame([
+            {"meter_number": "M-DUP", "customer_id": "C-A", "customer_name": "Alpha"},
+            {"meter_number": "M-DUP", "customer_id": "C-B", "customer_name": "Beta"},
+        ])
+        df_client = pd.DataFrame([
+            {"meter_number": "M-DUP", "customer_id": "C-A", "customer_name": "Alpha"},
+            {"meter_number": "M-DUP", "customer_id": "C-B", "customer_name": "Beta"},
+        ])
+
+        engine = ReconciliationEngine(df_alteco, df_client)
+        self.assertEqual(len(engine.matched), 4)  # 2x2 cross product, not 2
+
+        results = engine.run_all_steps()
+        customer_id_mismatches = results["step1"][results["step1"]["Mismatched Field"] == "Customer ID"]
+        # The (A,B) and (B,A) cross-pairs mismatch; (A,A) and (B,B) correctly don't.
+        self.assertEqual(len(customer_id_mismatches), 2)
+
+        # The duplicate itself is logged (see _detect_duplicate_meters), but
+        # deliberately kept out of the Meter Coverage table — it's a
+        # data-quality issue, not a "missing from one side" coverage gap, and
+        # the meter isn't missing from either side here.
+        self.assertTrue(results["step0"].empty)
+
+    def test_duplicate_meter_on_one_side_does_not_add_a_coverage_row(self):
+        """A meter duplicated on just one side (not both) is still logged as
+        a duplicate, but that fact alone must not add a row to Meter Coverage
+        (step0) — only a genuine "missing from one side" gap should. Here
+        the meter itself is present on both sides; the only legitimate
+        coverage row is the customer (C-Y) that Electra never billed."""
+        df_alteco = pd.DataFrame([
+            {"meter_number": "M-SOLO-DUP", "customer_id": "C-X", "customer_name": "X Corp"},
+            {"meter_number": "M-SOLO-DUP", "customer_id": "C-Y", "customer_name": "Y Corp"},
+        ])
+        df_client = pd.DataFrame([
+            {"meter_number": "M-SOLO-DUP", "customer_id": "C-X", "customer_name": "X Corp"},
+        ])
+
+        engine = ReconciliationEngine(df_alteco, df_client)
+        results = engine.run_all_steps()
+        df_step0 = results["step0"]
+
+        self.assertFalse(df_step0["Issue"].str.contains("Duplicate meter number").any())
+        self.assertEqual(len(df_step0), 1)
+        self.assertEqual(df_step0.iloc[0]["Match Key"], "Customer ID")
+        self.assertEqual(df_step0.iloc[0]["Value"], "C-Y")
+
+    def test_no_duplicate_meter_flagged_when_all_unique(self):
+        df_alteco = pd.DataFrame([{"meter_number": "M-UNIQUE-1", "customer_id": "C-1"}])
+        df_client = pd.DataFrame([{"meter_number": "M-UNIQUE-1", "customer_id": "C-1"}])
+
+        engine = ReconciliationEngine(df_alteco, df_client)
+        results = engine.run_all_steps()
+
+        self.assertTrue(results["step0"].empty)
+
+    def test_billing_month_client_side_not_reformatted_if_raw(self):
+        """Only the Alteco-side billing_month is reformatted to 'YYYY-MM' here
+        — the client side is expected to already arrive normalized (the
+        dynamic mapping's derive_from_date mode does this upstream). A raw,
+        unnormalized client value is NOT reformatted by the engine and shows
+        as a false mismatch even for the same month — reinforcing that the
+        mapping layer, not this engine, is responsible for normalizing it."""
+        df_alteco = pd.DataFrame([{"meter_number": "M-BM", "billing_month": "2026-06"}])
+        df_client = pd.DataFrame([{"meter_number": "M-BM", "billing_month": pd.Timestamp("2026-06-30")}])
+
+        engine = ReconciliationEngine(df_alteco, df_client)
+        results = engine.run_all_steps()
+        df_step1 = results["step1"]
+
+        self.assertEqual(len(df_step1), 1)
+        self.assertEqual(df_step1.iloc[0]["Mismatched Field"], "Billing Month")
+
+    def test_empty_dataframes_do_not_crash(self):
+        df_alteco = pd.DataFrame(columns=["meter_number", "customer_id"])
+        df_client = pd.DataFrame(columns=["meter_number", "customer_id"])
+
+        engine = ReconciliationEngine(df_alteco, df_client)
+        results = engine.run_all_steps()
+
+        for key in ["step0", "step1", "step2", "step3"]:
+            self.assertTrue(results[key].empty, f"{key} should be empty for empty input")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,11 @@
+import json
+import logging
 import re
 import pandas as pd
 
-from .data_loader import STANDARD_SCHEMA
+from .data_loader import STANDARD_SCHEMA, normalize_id_value
+
+logger = logging.getLogger(__name__)
 
 
 def inspect_workbook(file_obj):
@@ -23,7 +27,11 @@ def inspect_workbook(file_obj):
 
 
 def _normalize_id(series):
-    return series.astype(str).str.strip()
+    # See data_loader.normalize_id_value — undoes the float artifact Excel
+    # introduces for numeric-looking IDs (e.g. a blank cell elsewhere in the
+    # column forces it to float64, so "377007686" round-trips as
+    # 377007686.0 and would otherwise fail to match a clean string ID).
+    return series.map(normalize_id_value)
 
 
 def _column(df, sheet_name, column):
@@ -69,15 +77,22 @@ def load_mapped_data(file_obj, mapping):
     dataframe entirely from a user-configured mapping instead of hardcoded
     column names. See backend/mappings/electra_default.json for an example.
 
-    A field may live on the "primary" sheet (whichever sheet meter_number is
-    mapped from, one row per meter) or on the line-items sheet (one row per
-    billing line, aggregated per customer) — no other sheet is supported per
-    field, since there'd be no defined join key to reach it.
+    A field_mappings/billing_month entry may live on the "primary" sheet
+    (whichever sheet meter_number is mapped from, one row per meter) or on
+    the shared line-items sheet (one row per billing line, aggregated per
+    customer) — no other sheet is supported for those, since there'd be no
+    defined join key to reach it. Calculated fields are different: each one
+    carries its own sheet + group_by_column, fully independent of the shared
+    line-items sheet and of every other calculated field.
     """
     all_sheets = pd.read_excel(file_obj, sheet_name=None)
+    logger.info(
+        "CLIENT LOAD: read %d sheet(s): %s",
+        len(all_sheets), {name: df.shape for name, df in all_sheets.items()},
+    )
+    logger.info("CLIENT LOAD: mapping in use:\n%s", json.dumps(mapping, ensure_ascii=False, indent=2))
 
     field_mappings = mapping.get("field_mappings", {})
-    active_filter = mapping.get("active_filter")
     billing_month_cfg = mapping.get("billing_month")
     line_items_cfg = mapping.get("line_items")
     calculated_fields = mapping.get("calculated_fields", {})
@@ -87,10 +102,6 @@ def load_mapped_data(file_obj, mapping):
 
     primary_sheet_name = field_mappings["meter_number"]["sheet"]
     primary_df = all_sheets[primary_sheet_name].copy()
-
-    if active_filter:
-        col, val = active_filter["column"], active_filter["value"]
-        primary_df = primary_df[_normalize_id(_column(primary_df, primary_sheet_name, col)) == str(val).strip()]
 
     line_items_sheet_name = line_items_cfg["sheet"] if line_items_cfg else None
     line_items_df = all_sheets[line_items_sheet_name].copy() if line_items_sheet_name else None
@@ -141,25 +152,46 @@ def load_mapped_data(file_obj, mapping):
         else:
             result["billing_month"] = raw.values if hasattr(raw, "values") else raw
 
-    # --- Calculated fields: aggregated from the line-items sheet, per customer ---
-    if line_items_df is not None:
-        for target_key, rule in calculated_fields.items():
-            value_column = rule["value_column"]
-            _column(line_items_df, line_items_sheet_name, value_column)
-            filtered = _apply_filters(line_items_df, line_items_sheet_name, rule.get("filters", [])).copy()
-            filtered[group_by_column] = _normalize_id(filtered[group_by_column])
-            filtered[value_column] = pd.to_numeric(filtered[value_column], errors="coerce").fillna(0)
-            summed = filtered.groupby(group_by_column)[value_column].sum()
-            result[target_key] = result["customer_id"].map(summed)
+    # --- Calculated fields: each one is fully independent — its own sheet,
+    # its own group-by column, its own value column and filters. Picking a
+    # sheet for one calculated field has no effect on any other field, and
+    # none of them share the field_mappings/billing_month line-items sheet
+    # above (a calculated field may live on a completely different sheet).
+    for target_key, rule in calculated_fields.items():
+        calc_sheet_name = rule["sheet"]
+        calc_group_by = rule["group_by_column"]
+        calc_df = all_sheets[calc_sheet_name].copy()
+        value_column = rule["value_column"]
+        _column(calc_df, calc_sheet_name, value_column)
+        _column(calc_df, calc_sheet_name, calc_group_by)
+        filtered = _apply_filters(calc_df, calc_sheet_name, rule.get("filters", [])).copy()
+        filtered[calc_group_by] = _normalize_id(filtered[calc_group_by])
+        filtered[value_column] = pd.to_numeric(filtered[value_column], errors="coerce").fillna(0)
+        summed = filtered.groupby(calc_group_by)[value_column].sum()
+        result[target_key] = result["customer_id"].map(summed)
+        logger.info(
+            "CLIENT LOAD: calculated '%s' from sheet '%s' (%d/%d rows matched filters, "
+            "%d distinct customers summed, %d customers with no matching rows -> NaN)",
+            target_key, calc_sheet_name, len(filtered), len(calc_df), summed.shape[0],
+            result[target_key].isna().sum(),
+        )
 
     # Ensure every STANDARD_SCHEMA column exists (fill with None if missing),
-    # same tail behavior as the fixed-format Alteco loader.
-    for col in STANDARD_SCHEMA:
-        if col not in result.columns:
-            result[col] = None
+    # same tail behavior as the fixed-format Alteco loader. Inserted all at
+    # once via concat rather than one `result[col] = None` at a time, which
+    # fragments the DataFrame and triggers a PerformanceWarning.
+    missing_cols = [col for col in STANDARD_SCHEMA if col not in result.columns]
+    if missing_cols:
+        result = pd.concat([result, pd.DataFrame(None, index=result.index, columns=missing_cols)], axis=1)
 
+    # meter_number isn't run through _normalize_id above (only customer_id is,
+    # as the join key), so this is its only cleanup pass — use the same
+    # float-artifact-safe normalization, not a naive astype(str).
     for col in ["meter_number", "customer_id"]:
         if col in result.columns:
-            result[col] = result[col].astype(str).str.strip()
+            result[col] = result[col].map(normalize_id_value)
 
-    return result[STANDARD_SCHEMA]
+    final = result[STANDARD_SCHEMA]
+    logger.info("CLIENT LOAD: final DataFrame has %d rows, %d columns", len(final), len(final.columns))
+    logger.debug("CLIENT LOAD: final DataFrame (%d rows):\n%s", len(final), final.to_string())
+    return final
