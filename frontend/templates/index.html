@@ -4,12 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Altego Dashboard</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', path='img/alteco-logo.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
 </head>
 <body>
     <!-- Top Navigation Bar -->
     <header class="top-nav">
-        <div class="logo">Alteco</div>
+        <div class="brand">
+            <span class="brand-mark">
+                <img src="{{ url_for('static', path='img/alteco-logo.png') }}" alt="Alteco">
+            </span>
+            <span class="brand-text">
+                <span class="brand-name">Alteco</span>
+                <span class="brand-tagline">Billing Reconciliation</span>
+            </span>
+        </div>
     </header>
 
     <!-- Step Progress Bar -->

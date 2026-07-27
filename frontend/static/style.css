@@ -14,6 +14,8 @@
     --accent-soft: #e6f2ec;
     --accent-ring: rgba(10, 104, 71, 0.14);
 
+    --brand-tan: #b0a696;
+
     --success: #157f45;
     --success-soft: #edf9f2;
     --success-text: #0e5c33;
@@ -138,19 +140,47 @@ code { font-family: var(--mono); font-variant-numeric: tabular-nums; }
     border-bottom: 1px solid var(--border);
 }
 
-.logo {
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+.brand-mark {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 7px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(11, 14, 20, 0.06), 0 0 0 1px rgba(11, 14, 20, 0.05);
+}
+
+.brand-mark img {
+    display: block;
+    height: 20px;
+    width: auto;
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+
+.brand-name {
     font-size: 0.95rem;
     font-weight: 650;
     letter-spacing: -0.01em;
     color: var(--text);
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
 }
 
-.logo span {
-    color: var(--accent);
-    font-weight: 650;
+.brand-tagline {
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brand-tan);
 }
 
 /* ============ Main Layout ============ */
