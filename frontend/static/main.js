@@ -1052,9 +1052,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!name) return;
         try {
             const response = await fetch(`/mappings/${encodeURIComponent(name)}`);
-            if (response.status !== 200) throw new Error('Could not load mapping');
-            const config = await response.json();
-            applyMappingConfig(config);
+            const body = await response.json();
+            if (response.status !== 200) throw new Error(body.detail || 'Could not load mapping');
+            applyMappingConfig(body);
             resetAiSuggestionState();
             renderMappingPanel();
         } catch (e) {
@@ -1077,7 +1077,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config),
             });
-            if (response.status !== 200) throw new Error('Save failed');
+            const body = await response.json();
+            if (response.status !== 200) throw new Error(body.detail || 'Save failed');
             status.textContent = `Saved as "${name}"`;
             loadSavedMappingsList();
         } catch (e) {
@@ -1099,7 +1100,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm(`Delete the saved mapping "${name}"? This can't be undone.`)) return;
         try {
             const response = await fetch(`/mappings/${encodeURIComponent(name)}`, { method: 'DELETE' });
-            if (response.status !== 200) throw new Error('Delete failed');
+            const body = await response.json();
+            if (response.status !== 200) throw new Error(body.detail || 'Delete failed');
             loadSavedMappingsList();
             document.getElementById('mapping-save-status').textContent = `Deleted "${name}"`;
         } catch (e) {
@@ -1111,7 +1113,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!confirm('Delete every saved mapping except the bundled default? This can\'t be undone.')) return;
         try {
             const response = await fetch('/mappings', { method: 'DELETE' });
-            if (response.status !== 200) throw new Error('Reset failed');
+            const body = await response.json();
+            if (response.status !== 200) throw new Error(body.detail || 'Reset failed');
             loadSavedMappingsList();
             document.getElementById('mapping-save-status').textContent = 'All saved mappings deleted (default kept).';
         } catch (e) {

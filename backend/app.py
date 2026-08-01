@@ -17,6 +17,7 @@ from src.data_loader import load_alteco_data
 from src.dynamic_loader import inspect_workbook, load_mapped_data
 from src.export_report import build_discrepancy_workbook
 from src.reconciliation_engine import ReconciliationEngine
+from src import mapping_store
 
 # Full pipeline visibility in the terminal: every loaded DataFrame (shape +
 # full content), every field-by-field comparison (not just mismatches), and
@@ -33,7 +34,6 @@ logging.basicConfig(
 
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(os.path.dirname(BACKEND_DIR), "frontend")
-MAPPINGS_DIR = os.path.join(BACKEND_DIR, "mappings")
 
 load_dotenv(os.path.join(os.path.dirname(BACKEND_DIR), ".env"))
 
@@ -51,8 +51,8 @@ app.mount("/static", StaticFiles(directory=os.path.join(FRONTEND_DIR, "static"))
 templates = Jinja2Templates(directory=os.path.join(FRONTEND_DIR, "templates"))
 
 
-def _safe_mapping_filename(name):
-    """Restricts a user-supplied mapping name to a safe filename (no path traversal)."""
+def _clean_mapping_name(name):
+    """Restricts a user-supplied mapping name to a safe, predictable set of characters."""
     sanitized = re.sub(r"[^A-Za-z0-9_\- ]", "", name).strip()
     if not sanitized:
         raise HTTPException(status_code=400, detail="Invalid mapping name")
@@ -102,57 +102,65 @@ async def suggest_mapping(payload: dict):
         raise HTTPException(status_code=502, detail=f"AI suggestion failed: {str(e)}")
 
 
+def _mapping_store_error(e: RuntimeError):
+    raise HTTPException(status_code=503, detail=str(e))
+
+
 @app.get("/mappings")
 async def list_mappings():
-    """Lists saved mapping names (without the .json extension)."""
-    if not os.path.isdir(MAPPINGS_DIR):
-        return JSONResponse(content=[])
-    names = sorted(f[:-5] for f in os.listdir(MAPPINGS_DIR) if f.endswith(".json"))
-    return JSONResponse(content=names)
+    """Lists saved mapping names."""
+    try:
+        return JSONResponse(content=mapping_store.list_mapping_names())
+    except RuntimeError as e:
+        _mapping_store_error(e)
 
 
 @app.get("/mappings/{name}")
 async def get_mapping(name: str):
     """Returns a previously saved mapping config by name."""
-    filename = _safe_mapping_filename(name)
-    path = os.path.join(MAPPINGS_DIR, f"{filename}.json")
-    if not os.path.isfile(path):
+    clean_name = _clean_mapping_name(name)
+    try:
+        config = mapping_store.get_mapping(clean_name)
+    except RuntimeError as e:
+        _mapping_store_error(e)
+    if config is None:
         raise HTTPException(status_code=404, detail=f"No saved mapping named '{name}'")
-    with open(path, "r", encoding="utf-8") as f:
-        return JSONResponse(content=json.load(f))
+    return JSONResponse(content=config)
 
 
 @app.post("/mappings/{name}")
 async def save_mapping(name: str, mapping: dict):
     """Saves a mapping config under the given name, overwriting any existing one."""
-    filename = _safe_mapping_filename(name)
-    os.makedirs(MAPPINGS_DIR, exist_ok=True)
-    path = os.path.join(MAPPINGS_DIR, f"{filename}.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(mapping, f, ensure_ascii=False, indent=2)
-    return JSONResponse(content={"status": "saved", "name": filename})
+    clean_name = _clean_mapping_name(name)
+    try:
+        mapping_store.save_mapping(clean_name, mapping)
+    except RuntimeError as e:
+        _mapping_store_error(e)
+    return JSONResponse(content={"status": "saved", "name": clean_name})
 
 
 @app.delete("/mappings/{name}")
 async def delete_mapping(name: str):
     """Deletes a single saved mapping by name."""
-    filename = _safe_mapping_filename(name)
-    if filename == PROTECTED_MAPPING_NAME:
+    clean_name = _clean_mapping_name(name)
+    if clean_name == PROTECTED_MAPPING_NAME:
         raise HTTPException(status_code=400, detail="The bundled default mapping can't be deleted.")
-    path = os.path.join(MAPPINGS_DIR, f"{filename}.json")
-    if not os.path.isfile(path):
+    try:
+        deleted = mapping_store.delete_mapping(clean_name)
+    except RuntimeError as e:
+        _mapping_store_error(e)
+    if not deleted:
         raise HTTPException(status_code=404, detail=f"No saved mapping named '{name}'")
-    os.remove(path)
-    return JSONResponse(content={"status": "deleted", "name": filename})
+    return JSONResponse(content={"status": "deleted", "name": clean_name})
 
 
 @app.delete("/mappings")
 async def delete_all_mappings():
     """Deletes every saved mapping except the bundled default (main.py and the tests depend on it existing)."""
-    if os.path.isdir(MAPPINGS_DIR):
-        for f in os.listdir(MAPPINGS_DIR):
-            if f.endswith(".json") and f[:-5] != PROTECTED_MAPPING_NAME:
-                os.remove(os.path.join(MAPPINGS_DIR, f))
+    try:
+        mapping_store.delete_all_mappings(except_name=PROTECTED_MAPPING_NAME)
+    except RuntimeError as e:
+        _mapping_store_error(e)
     return JSONResponse(content={"status": "cleared"})
 
 
