@@ -5,5 +5,8 @@
       "maxDuration": 60,
       "excludeFiles": "{backend/tests/**,data/**,.pytest_cache/**,**/__pycache__/**}"
     }
-  }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ]
 }
