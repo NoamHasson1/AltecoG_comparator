@@ -1,0 +1,36 @@
+# Render Blueprint: defines two persistent services so "production" and
+# "development" are always separate, running deployments, not just an idea.
+# Import this once at render.com (New -> Blueprint -> pick this repo) and it
+# creates both. You'll be prompted to paste in the secret values below
+# (marked sync: false) at that point -- they're never stored in this file.
+#
+# - production tracks the main branch and uses the production Neon database.
+# - development tracks the development branch and uses the separate
+#   development Neon branch already created for local/dev use -- so pushing
+#   to development never touches real production data.
+services:
+  - name: altego-poc-production
+    type: web
+    runtime: python
+    plan: free
+    branch: main
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+
+  - name: altego-poc-development
+    type: web
+    runtime: python
+    plan: free
+    branch: development
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
