@@ -11,6 +11,14 @@
 // restricting the upload to spreadsheet file types.
 import { handleUpload } from '@vercel/blob/client';
 
+// Required so this plain (non-framework) function gets a Web-standard
+// Request/Response — the default Node.js runtime instead passes a classic
+// Node request object with no .json() method, which is what caused
+// "request.json is not a function" without this.
+export const config = {
+  runtime: 'edge',
+};
+
 export default async function handler(request) {
   const body = await request.json();
 
