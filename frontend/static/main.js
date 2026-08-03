@@ -193,6 +193,36 @@ document.addEventListener('DOMContentLoaded', () => {
         { key: 'distribution_fixed_charge', label: '₪ חיוב קבוע חלוקה' },
     ];
 
+    // ============ Large-file upload (bypasses Vercel's 4.5MB request limit) ============
+    // Files over this size go straight from the browser to Vercel Blob storage
+    // instead of through our own server, then the backend is handed just the
+    // resulting URL to fetch itself. Below this size, a plain direct upload is
+    // simpler and also the only path that works when running locally (this
+    // Blob endpoint only exists once deployed to Vercel).
+    const LARGE_FILE_THRESHOLD_BYTES = 4 * 1024 * 1024; // 4MB, a safety margin under Vercel's 4.5MB hard limit
+
+    async function uploadLargeFileToBlob(file) {
+        const { upload } = await import('https://esm.sh/@vercel/blob@2.6.1/client');
+        const blob = await upload(file.name, file, {
+            access: 'public',
+            handleUploadUrl: '/api/blob-upload-token',
+        });
+        return blob.url;
+    }
+
+    // Returns { file } for a normal direct upload, or { blobUrl } once the
+    // file is uploaded to Blob storage directly from the browser.
+    async function prepareFileForUpload(file) {
+        if (file.size <= LARGE_FILE_THRESHOLD_BYTES) return { file };
+        const blobUrl = await uploadLargeFileToBlob(file);
+        return { blobUrl };
+    }
+
+    function appendPreparedFile(formData, fieldName, blobUrlFieldName, prepared) {
+        if (prepared.blobUrl) formData.append(blobUrlFieldName, prepared.blobUrl);
+        else formData.append(fieldName, prepared.file);
+    }
+
     // ============ Inspecting the client file ============
     async function handleElectraFileChange(file) {
         if (!file) {
@@ -205,12 +235,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         inspectStatus.style.display = 'block';
         inspectStatus.className = 'inspect-status';
-        inspectStatus.textContent = 'Reading file structure...';
+        inspectStatus.textContent = file.size > LARGE_FILE_THRESHOLD_BYTES
+            ? 'Uploading large file...' : 'Reading file structure...';
         continueSpinner.style.display = 'inline-block';
 
         try {
+            const prepared = await prepareFileForUpload(file);
+            inspectStatus.textContent = 'Reading file structure...';
             const formData = new FormData();
-            formData.append('file', file);
+            appendPreparedFile(formData, 'file', 'blob_url', prepared);
             const response = await fetch('/inspect-file', { method: 'POST', body: formData });
             const data = await response.json();
             if (response.status !== 200) throw new Error(data.detail || 'Could not read file');
@@ -1128,16 +1161,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const mappingConfig = gatherReconcileConfig();
 
-        const formData = new FormData();
-        formData.append('alteco_file', altecoFile);
-        formData.append('electra_file', electraFile);
-        formData.append('mapping', JSON.stringify(mappingConfig));
-
         reconcileBtn.disabled = true;
         reconcileBtn.querySelector('.btn-text').textContent = 'Processing...';
         reconcileSpinner.style.display = 'inline-block';
 
         try {
+            const [altecoPrepared, electraPrepared] = await Promise.all([
+                prepareFileForUpload(altecoFile),
+                prepareFileForUpload(electraFile),
+            ]);
+
+            const formData = new FormData();
+            appendPreparedFile(formData, 'alteco_file', 'alteco_blob_url', altecoPrepared);
+            appendPreparedFile(formData, 'electra_file', 'electra_blob_url', electraPrepared);
+            formData.append('mapping', JSON.stringify(mappingConfig));
+
             const response = await fetch('/reconcile', { method: 'POST', body: formData });
             const results = await response.json();
 
