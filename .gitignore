@@ -7,9 +7,6 @@ __pycache__/
 # Virtual environment
 venv/
 
-# Node dependencies (for api/blob-upload-token.js)
-node_modules/
-
 # Environment variables / secrets
 .env
 .env.*

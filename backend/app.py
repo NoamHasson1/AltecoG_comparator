@@ -1,10 +1,8 @@
-import io
 import json
 import logging
 import os
 import re
 import uvicorn
-import httpx
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
@@ -53,27 +51,6 @@ app.mount("/static", StaticFiles(directory=os.path.join(FRONTEND_DIR, "static"))
 templates = Jinja2Templates(directory=os.path.join(FRONTEND_DIR, "templates"))
 
 
-async def _resolve_file_input(upload: UploadFile, blob_url: str):
-    """
-    Returns a file-like object for whichever input arrived. Direct multipart
-    uploads (`upload`) work fine locally and for small files anywhere, but
-    Vercel Functions reject any request body over 4.5MB before this code
-    even runs — real billing exports routinely exceed that. For those, the
-    browser instead uploads straight to Vercel Blob storage (bypassing that
-    limit entirely) and sends just the resulting `blob_url` here, which this
-    fetches server-to-server. Either path hands the same kind of object to
-    the existing loaders, which don't need to know which one happened.
-    """
-    if blob_url:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(blob_url, follow_redirects=True, timeout=60.0)
-            response.raise_for_status()
-        return io.BytesIO(response.content)
-    if upload:
-        return upload.file
-    raise HTTPException(status_code=400, detail="No file provided (need either a direct upload or a blob_url).")
-
-
 def _clean_mapping_name(name):
     """Restricts a user-supplied mapping name to a safe, predictable set of characters."""
     sanitized = re.sub(r"[^A-Za-z0-9_\- ]", "", name).strip()
@@ -91,18 +68,14 @@ async def index(request: Request):
 
 
 @app.post("/inspect-file")
-async def inspect_file(file: UploadFile = File(None), blob_url: str = Form(None)):
+async def inspect_file(file: UploadFile = File(...)):
     """
     Reads an uploaded client billing file and returns its sheet/column
     structure (plus a few sample rows per sheet) so the mapping UI can be
-    built against the file's real shape. Accepts either a direct upload or a
-    blob_url (see _resolve_file_input) for files too large for a direct request.
+    built against the file's real shape.
     """
     try:
-        file_obj = await _resolve_file_input(file, blob_url)
-        return JSONResponse(content=jsonable_encoder(inspect_workbook(file_obj)))
-    except HTTPException:
-        raise
+        return JSONResponse(content=jsonable_encoder(inspect_workbook(file.file)))
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Could not read file: {str(e)}")
@@ -193,26 +166,17 @@ async def delete_all_mappings():
 
 @app.post("/reconcile")
 async def reconcile_files(
-    alteco_file: UploadFile = File(None),
-    electra_file: UploadFile = File(None),
-    alteco_blob_url: str = Form(None),
-    electra_blob_url: str = Form(None),
+    alteco_file: UploadFile = File(...),
+    electra_file: UploadFile = File(...),
     mapping: str = Form(...),
 ):
     logger = logging.getLogger("app.reconcile")
-    logger.info(
-        "RECONCILE REQUEST: alteco_file=%r electra_file=%r (blob: alteco=%s electra=%s)",
-        alteco_file.filename if alteco_file else None,
-        electra_file.filename if electra_file else None,
-        bool(alteco_blob_url), bool(electra_blob_url),
-    )
+    logger.info("RECONCILE REQUEST: alteco_file=%r electra_file=%r", alteco_file.filename, electra_file.filename)
     try:
         mapping_config = json.loads(mapping)
 
-        alteco_obj = await _resolve_file_input(alteco_file, alteco_blob_url)
-        electra_obj = await _resolve_file_input(electra_file, electra_blob_url)
-        df_alteco = load_alteco_data(alteco_obj)
-        df_electra = load_mapped_data(electra_obj, mapping_config)
+        df_alteco = load_alteco_data(alteco_file.file)
+        df_electra = load_mapped_data(electra_file.file, mapping_config)
 
         engine = ReconciliationEngine(df_alteco, df_electra)
 
@@ -232,8 +196,6 @@ async def reconcile_files(
 
         return JSONResponse(content=jsonable_encoder(response_data))
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.exception("RECONCILE FAILED")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")

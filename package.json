@@ -1,9 +1,0 @@
-{
-  "name": "altego-poc",
-  "private": true,
-  "type": "module",
-  "description": "Node dependency manifest for the one JS Vercel Function (api/blob-upload-token.js) that authorizes direct browser-to-Blob uploads, bypassing Vercel's 4.5MB request body limit for large billing files. The rest of the app is Python (see requirements.txt) — this file exists only for that.",
-  "dependencies": {
-    "@vercel/blob": "^2.6.1"
-  }
-}
