@@ -1,11 +1,6 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Virtual environment
-venv/
+# Node dependencies and build output (backend-ts/)
+node_modules/
+dist/
 
 # Environment variables / secrets
 .env
@@ -14,6 +9,3 @@ venv/
 
 # macOS specific files
 .DS_Store
-
-# Generated data files
-data/discrepancies_report.xlsx.DS_Store
